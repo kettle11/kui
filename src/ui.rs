@@ -6,8 +6,6 @@ pub type ElementHandle = NodeHandle;
 pub enum ElementType {
     /// A fill is a container that accepts a single element
     Fill((f32, f32, f32, f32)),
-    /// A container that defines a minimum width
-    MinimumWidth(f32),
     /// A container that accepts a single element and constrains its width
     Width(f32),
     /// A container that accepts a single element and constrains its height
@@ -107,10 +105,6 @@ impl UI {
                 (s.0.max(child_size.0), s.1 + child_size.1)
             }),
             ElementType::Width(width) => {
-                independent_layout(tree, elements, node);
-                (width, f32::MAX)
-            }
-            ElementType::MinimumWidth(width) => {
                 independent_layout(tree, elements, node);
                 (width, f32::MAX)
             }

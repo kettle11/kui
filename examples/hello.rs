@@ -1,9 +1,7 @@
 use glow::*;
-use kettlewin::*;
-mod tree;
-mod ui;
+use kapp::*;
+use kui::*;
 
-use ui::*;
 fn main() {
     let (app, event_loop) = initialize();
     let mut window_width = 800;
@@ -34,28 +32,36 @@ fn main() {
 
     let red = (1.0, 0.0, 0.0, 1.0);
     let blue = (0.0, 0.0, 1.0, 1.0);
+    let light_gray0 = (0.6, 0.6, 0.6, 1.0);
+    let light_gray1 = (0.5, 0.5, 0.5, 1.0);
+
     let gray = (0.28, 0.28, 0.28, 1.0);
 
-    let mut body = ui.edit();
-    let mut column = body.column();
-    // body.fill(0.3, 0.3, 0.3, 1.0);
+    let body = ui.edit();
+    // body.row().fill(red).padding(20.);
+    let column = body.column();
 
-    let mut nav = column.height(100.).fill(gray).evenly_spaced_row();
-    let mut nav_left = nav.row();
-    nav_left.width(200.).padding(20.).fill(blue);
-    nav_left.width(300.).padding(20.).fill(blue);
+    let nav = column.height(100.).fill(gray); //.evenly_spaced_row();
 
-    let mut nav_right = nav.reverse_row();
-    nav_right.width(200.).padding(20.).fill(red);
-    nav_right.width(330.).padding(20.).fill(red);
-    nav_right.width(180.).padding(20.).fill(red);
+    let nav_left = nav.row();
+    for _ in 0..3 {
+        let button = nav_left.padding(20.).row();
+        button.width(60.).fill(red); // Icon
+        button.width(200.).fill(blue);
+    }
 
-    let mut m = column.row();
-    m.width(200.).padding(10.).fill(blue);
-    m.width(120.).padding(10.).fill(blue);
-    m.width(430.).padding(10.).fill(blue);
-    m.width(200.).padding(10.).fill(blue);
-    m.width(250.).padding(10.).fill(blue);
+    let nav_right = nav.reverse_row();
+    for _ in 0..3 {
+        let button = nav_right.padding(20.).row();
+        button.width(60.).fill(red); // Icon
+        button.width(200.).fill(blue); // Icon
+    }
+
+    let content = column.column();
+    for _ in 0..30 {
+        content.height(50.).padding(5.).fill(light_gray0);
+        content.height(50.).padding(5.).fill(light_gray1);
+    }
 
     event_loop.run(move |event| match event {
         Event::WindowCloseRequested { .. } => app.quit(),

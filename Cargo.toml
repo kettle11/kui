@@ -1,5 +1,5 @@
 [package]
-name = "kUI"
+name = "kui"
 version = "0.1.0"
 authors = ["Ian Kettlewell <ian.kettlewell@gmail.com>"]
 edition = "2018"
@@ -7,5 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kettlewin = { git = "https://github.com/kettle11/kettlewin"}
+fontdue = "0.1.2"
+
+[dev-dependencies]
+kapp = { git = "https://github.com/kettle11/kApp"}
 glow = {git = "https://github.com/grovesNL/glow"}
