@@ -75,7 +75,7 @@ impl UI {
     pub fn edit(&mut self) -> UIBuilder {
         let root = self.root;
         UIBuilder {
-            ui: self,
+            ui: Rc::new(RefCell::new(self)),
             current_container: Some(root),
         }
     }
@@ -288,129 +288,58 @@ pub struct Drawable {
     pub color: (f32, f32, f32, f32),
 }
 
+use std::cell::RefCell;
+use std::rc::Rc;
 pub struct UIBuilder<'a> {
-    ui: &'a mut UI,
+    ui: Rc<RefCell<&'a mut UI>>,
     current_container: Option<NodeHandle>,
 }
 
-impl<'b, 'a: 'b> UIBuilder<'a> {
-    fn add_container(&'b mut self, element_type: ElementType) -> UIBuilder<'b> {
-        let new_container = self.ui.add(element_type, self.current_container);
+impl<'a> UIBuilder<'a> {
+    fn add_container(&self, element_type: ElementType) -> Self {
+        let new_container = self
+            .ui
+            .borrow_mut()
+            .add(element_type, self.current_container);
         UIBuilder {
-            ui: self.ui,
+            ui: self.ui.clone(),
             current_container: Some(new_container),
         }
     }
 
-    fn add_container_single(&'b mut self, element_type: ElementType) -> UIBuilderSingle<'b> {
-        let new_container = self.ui.add(element_type, self.current_container);
-        UIBuilderSingle {
-            ui: self.ui,
-            current_container: Some(new_container),
-        }
-    }
-
-    fn add_element(&'b mut self, element_type: ElementType) -> &'b mut Self {
-        self.ui.add(element_type, self.current_container);
-        self
-    }
-
-    pub fn row(&'b mut self) -> UIBuilder<'b> {
+    pub fn row(&self) -> Self {
         self.add_container(ElementType::Row)
     }
 
-    pub fn reverse_row(&'b mut self) -> UIBuilder<'b> {
+    pub fn reverse_row(&self) -> Self {
         self.add_container(ElementType::ReverseRow)
     }
 
-    pub fn evenly_spaced_row(&'b mut self) -> UIBuilder<'b> {
+    pub fn evenly_spaced_row(&self) -> Self {
         self.add_container(ElementType::EvenlySpacedRow)
     }
 
-    pub fn column(&'b mut self) -> UIBuilder<'b> {
+    pub fn column(&self) -> Self {
         self.add_container(ElementType::Column)
     }
 
-    pub fn stack(&'b mut self) -> UIBuilder<'b> {
+    pub fn stack(&self) -> Self {
         self.add_container(ElementType::Stack)
     }
 
-    pub fn width(&'b mut self, width_pixels: f32) -> UIBuilderSingle<'b> {
-        self.add_container_single(ElementType::Width(width_pixels))
+    pub fn width(&self, width_pixels: f32) -> Self {
+        self.add_container(ElementType::Width(width_pixels))
     }
 
-    pub fn padding(&'b mut self, padding: f32) -> UIBuilderSingle<'b> {
-        self.add_container_single(ElementType::Padding(padding))
+    pub fn padding(&self, padding: f32) -> Self {
+        self.add_container(ElementType::Padding(padding))
     }
 
-    pub fn height(&'b mut self, height_pixels: f32) -> UIBuilderSingle<'b> {
-        self.add_container_single(ElementType::Height(height_pixels))
+    pub fn height(&self, height_pixels: f32) -> Self {
+        self.add_container(ElementType::Height(height_pixels))
     }
 
-    pub fn fill(&'b mut self, color: (f32, f32, f32, f32)) -> UIBuilderSingle<'b> {
-        self.add_container_single(ElementType::Fill(color))
-    }
-}
-
-/// Containers that only accept a single child.
-pub struct UIBuilderSingle<'a> {
-    ui: &'a mut UI,
-    current_container: Option<NodeHandle>,
-}
-
-impl<'a> UIBuilderSingle<'a> {
-    fn add_container(self, element_type: ElementType) -> UIBuilder<'a> {
-        let new_container = self.ui.add(element_type, self.current_container);
-        UIBuilder {
-            ui: self.ui,
-            current_container: Some(new_container),
-        }
-    }
-
-    fn add_container_single(mut self, element_type: ElementType) -> Self {
-        let new_container = self.ui.add(element_type, self.current_container);
-        self.current_container = Some(new_container);
-        self
-    }
-
-    fn add_element(self, element_type: ElementType) -> Self {
-        self.ui.add(element_type, self.current_container);
-        self
-    }
-
-    pub fn stack(self) -> UIBuilder<'a> {
-        self.add_container(ElementType::Stack)
-    }
-
-    pub fn row(self) -> UIBuilder<'a> {
-        self.add_container(ElementType::Row)
-    }
-
-    pub fn reverse_row(self) -> UIBuilder<'a> {
-        self.add_container(ElementType::ReverseRow)
-    }
-
-    pub fn evenly_spaced_row(self) -> UIBuilder<'a> {
-        self.add_container(ElementType::EvenlySpacedRow)
-    }
-
-    pub fn column(self) -> UIBuilder<'a> {
-        self.add_container(ElementType::Column)
-    }
-
-    pub fn width(self, width_pixels: f32) -> Self {
-        self.add_container_single(ElementType::Width(width_pixels))
-    }
-
-    pub fn padding(self, padding: f32) -> Self {
-        self.add_container_single(ElementType::Padding(padding))
-    }
-
-    pub fn height(self, height_pixels: f32) -> Self {
-        self.add_container_single(ElementType::Height(height_pixels))
-    }
-
-    pub fn fill(self, color: (f32, f32, f32, f32)) -> Self {
-        self.add_container_single(ElementType::Fill(color))
+    pub fn fill(&self, color: (f32, f32, f32, f32)) -> Self {
+        self.add_container(ElementType::Fill(color))
     }
 }
