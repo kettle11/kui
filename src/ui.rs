@@ -36,6 +36,7 @@ pub struct UI {
     elements: Vec<Element>,
     width: f32,
     height: f32,
+    drawables: Vec<Drawable>,
 }
 
 impl UI {
@@ -46,6 +47,7 @@ impl UI {
             root: NodeHandle(0),
             width: 0.0,
             height: 0.0,
+            drawables: Vec::new(),
         };
         ui.add(ElementType::Stack, None);
         ui
@@ -123,7 +125,7 @@ impl UI {
                     let child_size = Self::layout(tree, elements, n);
                     (s.0.max(child_size.0), s.1.max(child_size.1))
                 });
-                (padding.max(child_size.0), padding.max(child_size.1))
+                (child_size.0 + padding * 2., child_size.1 + padding * 2.)
             }
             ElementType::Stack | ElementType::Fill(..) => {
                 independent_layout(tree, elements, node);
@@ -261,17 +263,22 @@ impl UI {
         self.height = height;
     }
 
-    pub fn render(&mut self) -> Vec<Drawable> {
+    pub fn render(&mut self) -> &Vec<Drawable> {
+        let now = std::time::Instant::now();
+
         Self::layout(&self.tree, &mut self.elements, self.root);
-        let mut drawables = Vec::new();
+        self.drawables.clear();
         Self::render_element(
             &self.tree,
             &mut self.elements,
-            &mut drawables,
+            &mut self.drawables,
             (0., 0., self.width, self.height),
             self.root,
         );
-        drawables
+
+        println!("Time: {:?}", now.elapsed().as_secs_f32());
+
+        &self.drawables
     }
 }
 
