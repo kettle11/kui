@@ -28,6 +28,8 @@ fn main() {
     }
 
     let mut ui = UI::new();
+
+    ui.font_from_bytes(&std::fs::read("resources/Inter-Regular.ttf").unwrap());
     ui.resize(window_width as f32, window_height as f32);
 
     let red = (1.0, 0.0, 0.0, 1.0);
@@ -39,29 +41,26 @@ fn main() {
 
     let body = ui.edit();
     // body.row().fill(red).padding(20.);
-    let column = body.column();
+    // let column = body.column();
 
-    let nav = column.height(100.).fill(gray); //.evenly_spaced_row();
+    let nav = body.height(100.).fill(gray).expander(); //.evenly_spaced_row();
 
     let nav_left = nav.row();
-    for _ in 0..3 {
-        let button = nav_left.padding(20.).row();
-        button.width(60.).fill(red); // Icon
-        button.width(200.).fill(blue);
-    }
 
+    fn button(ui: &UIBuilder, color: (f32, f32, f32, f32), text: &str) {
+        ui.padding(20.).fill(color).height(60.).text(text);
+    }
+    button(&nav_left, red, "Hello");
+    button(&nav_left, red, "Another button");
+    button(&nav_left, red, "Yet another button");
+
+    /*
     let nav_right = nav.reverse_row();
     for _ in 0..3 {
         let button = nav_right.padding(20.).row();
         button.width(60.).fill(red); // Icon
         button.width(200.).fill(blue); // Icon
-    }
-
-    let content = column.column();
-    for _ in 0..30 {
-        content.height(50.).padding(5.).fill(light_gray0);
-        content.height(50.).padding(5.).fill(light_gray1);
-    }
+    }*/
 
     event_loop.run(move |event| match event {
         Event::WindowCloseRequested { .. } => app.quit(),

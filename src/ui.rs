@@ -1,10 +1,11 @@
+use crate::rectangle::Rectangle;
 use crate::tree::{NodeHandle, Tree};
-
+use fontdue;
 pub type ElementHandle = NodeHandle;
 
 #[derive(Debug)]
 pub enum ElementType {
-    /// A fill is a container that accepts a single element
+    /// Draw a rectangle equivalent to the area of its children
     Fill((f32, f32, f32, f32)),
     /// A container that accepts a single element and constrains its width
     Width(f32),
@@ -12,8 +13,6 @@ pub enum ElementType {
     Height(f32),
     /// A container that accepts a single element and pads its width and height
     Padding(f32),
-    /// Stacks accept multiple elements and put them on top of eachother.
-    Stack,
     /// Rows lay out multiple elements in a row.
     Row,
     /// Reverse row lay out multiple elements in a row with the opposite alignment.
@@ -22,6 +21,10 @@ pub enum ElementType {
     EvenlySpacedRow,
     /// Columns lay out multiple elements in a column.
     Column,
+    /// Unstyled text
+    Text(String),
+    /// Always takes up maximum available space
+    Expander,
 }
 pub struct Element {
     element_type: ElementType,
@@ -35,6 +38,107 @@ pub struct UI {
     width: f32,
     height: f32,
     drawables: Vec<Drawable>,
+    fonts: Vec<fontdue::Font>,
+}
+
+/// Layout borrows things from the UI
+struct Layout<'a> {
+    fonts: &'a Vec<fontdue::Font>,
+    tree: &'a Tree,
+    elements: &'a mut Vec<Element>,
+}
+
+impl<'a> Layout<'a> {
+    fn independent_layout(&mut self, node: NodeHandle) {
+        for child in self.tree.child_iter(node) {
+            self.layout(child);
+        }
+    }
+    pub fn layout(&mut self, node: NodeHandle) -> (f32, f32) {
+        let element = &self.elements[node.0];
+        let size: (f32, f32) = match &element.element_type {
+            // A row walks through all summing up their widths and taking the max of their heights
+            ElementType::Row | ElementType::ReverseRow => {
+                self.tree.child_iter(node).fold((0., 0.), |s, n| {
+                    let child_size = self.layout(n);
+                    (s.0 + child_size.0, s.1.max(child_size.1))
+                })
+            }
+            // Takes up maximum available horizontal space. Fits to child height.
+            ElementType::EvenlySpacedRow => self
+                .tree
+                .child_iter(node)
+                .fold((f32::MAX, 0.), |s, n| (f32::MAX, s.1.max(self.layout(n).1))),
+            // A row walks through all summing up their widths and taking the max of their heights
+            ElementType::Column => self.tree.child_iter(node).fold((0., 0.), |s, n| {
+                let child_size = self.layout(n);
+                (s.0.max(child_size.0), s.1 + child_size.1)
+            }),
+            ElementType::Width(width) => {
+                let width = *width;
+                let child_size: (f32, f32) = self.tree.child_iter(node).fold((0., 0.), |s, n| {
+                    let child_size = self.layout(n);
+                    (s.0.max(child_size.0), s.1.max(child_size.1))
+                });
+                (width, child_size.1)
+            }
+            ElementType::Height(height) => {
+                let height = *height;
+                let child_size: (f32, f32) = self.tree.child_iter(node).fold((0., 0.), |s, n| {
+                    let child_size = self.layout(n);
+                    (s.0.max(child_size.0), s.1.max(child_size.1))
+                });
+                (child_size.0, height)
+            }
+            ElementType::Padding(padding) => {
+                let padding = *padding;
+                // Padding ensures that the space is requested is at least padding.
+                // Probably padding shouldn't have to walk the tree and should just assume one child.
+                let child_size: (f32, f32) = self.tree.child_iter(node).fold((0., 0.), |s, n| {
+                    let child_size = self.layout(n);
+                    (s.0.max(child_size.0), s.1.max(child_size.1))
+                });
+                (child_size.0 + padding * 2., child_size.1 + padding * 2.)
+            }
+
+            ElementType::Text(text) => {
+                let text_style = fontdue::layout::TextStyle {
+                    text: &text,
+                    px: 60.,
+                    font: &self.fonts[0],
+                };
+
+                let layout_settings = fontdue::layout::LayoutSettings {
+                    ..fontdue::layout::LayoutSettings::default()
+                };
+
+                let mut layout = Vec::new();
+                fontdue::layout::layout_horizontal(&text_style, &layout_settings, &mut layout);
+
+                if let Some(c) = layout.get(0) {
+                    let rectangle = Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
+                    let total_rectangle = layout.iter().fold(rectangle, |r, c| {
+                        let c_rectangle = Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
+                        r.join(c_rectangle)
+                    });
+                    (total_rectangle.width, total_rectangle.height)
+                } else {
+                    (0., 0.)
+                }
+            }
+            ElementType::Fill(..) => self.tree.child_iter(node).fold((0., 0.), |s, n| {
+                let child_size = self.layout(n);
+                (s.0.max(child_size.0), s.1.max(child_size.1))
+            }),
+            ElementType::Expander => {
+                self.independent_layout(node);
+                (f32::MAX, f32::MAX)
+            }
+            _ => unimplemented!(),
+        };
+        self.elements[node.0].size = size;
+        size
+    }
 }
 
 impl UI {
@@ -46,11 +150,18 @@ impl UI {
             width: 0.0,
             height: 0.0,
             drawables: Vec::new(),
+            fonts: Vec::new(),
         };
-        ui.add(ElementType::Stack, None);
+        ui.add(ElementType::Expander, None);
         ui
     }
 
+    pub fn font_from_bytes(&mut self, bytes: &[u8]) {
+        let font = fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).unwrap();
+        self.fonts.push(font);
+    }
+
+    /// Directly add an element to the UI tree.
     pub fn add(
         &mut self,
         element_type: ElementType,
@@ -76,59 +187,6 @@ impl UI {
             ui: Rc::new(RefCell::new(self)),
             current_container: Some(root),
         }
-    }
-
-    /// Walk through the layout tree.
-    /// Each element requests the maximum space possible according to their rules.
-    fn layout(tree: &Tree, elements: &mut Vec<Element>, node: NodeHandle) -> (f32, f32) {
-        fn independent_layout(tree: &Tree, elements: &mut Vec<Element>, node: NodeHandle) {
-            for child in tree.child_iter(node) {
-                UI::layout(tree, elements, child);
-            }
-        }
-        let element = &elements[node.0];
-        let size: (f32, f32) = match element.element_type {
-            // A row walks through all summing up their widths and taking the max of their heights
-            ElementType::Row | ElementType::ReverseRow => {
-                tree.child_iter(node).fold((0., 0.), |s, n| {
-                    let child_size = Self::layout(tree, elements, n);
-                    (s.0 + child_size.0, s.1.max(child_size.1))
-                })
-            }
-            // Takes up maximum available horizontal space. Fits to child height.
-            ElementType::EvenlySpacedRow => tree.child_iter(node).fold((f32::MAX, 0.), |s, n| {
-                (f32::MAX, s.1.max(Self::layout(tree, elements, n).1))
-            }),
-            // A row walks through all summing up their widths and taking the max of their heights
-            ElementType::Column => tree.child_iter(node).fold((0., 0.), |s, n| {
-                let child_size = Self::layout(tree, elements, n);
-                (s.0.max(child_size.0), s.1 + child_size.1)
-            }),
-            ElementType::Width(width) => {
-                independent_layout(tree, elements, node);
-                (width, f32::MAX)
-            }
-            ElementType::Height(height) => {
-                independent_layout(tree, elements, node);
-                (f32::MAX, height)
-            }
-            ElementType::Padding(padding) => {
-                // Padding ensures that the space is requested is atleast padding.
-                // Probably padding shouldn't have to walk the tree and should just assume one child.
-                let child_size: (f32, f32) = tree.child_iter(node).fold((0., 0.), |s, n| {
-                    let child_size = Self::layout(tree, elements, n);
-                    (s.0.max(child_size.0), s.1.max(child_size.1))
-                });
-                (child_size.0 + padding * 2., child_size.1 + padding * 2.)
-            }
-            ElementType::Stack | ElementType::Fill(..) => {
-                independent_layout(tree, elements, node);
-                (f32::MAX, f32::MAX)
-            }
-            _ => unimplemented!(),
-        };
-        elements[node.0].size = size;
-        size
     }
 
     /// Max space passes in the available space to the element
@@ -221,13 +279,22 @@ impl UI {
                 (rectangle.2, height)
             }
             ElementType::Fill(color) => {
-                drawables.push(Drawable { rectangle, color });
+                let fill_rectangle = (
+                    rectangle.0,
+                    rectangle.1,
+                    element_width.min(rectangle.2),
+                    element_height.min(rectangle.3),
+                );
+                drawables.push(Drawable {
+                    rectangle: fill_rectangle,
+                    color,
+                });
                 // Render all children with the full size of the space.
                 // Although technically should only contain a single child
                 for child in tree.child_iter(node) {
                     Self::render_element(tree, elements, drawables, rectangle, child);
                 }
-                (rectangle.2, rectangle.3)
+                (element_width, element_height) // Just use size calculated during layout
             }
             ElementType::Padding(padding) => {
                 let padded_rectangle = (
@@ -241,7 +308,14 @@ impl UI {
                 }
                 (element_width, element_height) // Just use size calculated during layout
             }
-            ElementType::Stack => {
+            ElementType::Expander => {
+                // A stack simply renders all children with the full size of the space.
+                for child in tree.child_iter(node) {
+                    Self::render_element(tree, elements, drawables, rectangle, child);
+                }
+                (rectangle.2, rectangle.3)
+            }
+            ElementType::Text(_) => {
                 // A stack simply renders all children with the full size of the space.
                 for child in tree.child_iter(node) {
                     Self::render_element(tree, elements, drawables, rectangle, child);
@@ -260,7 +334,13 @@ impl UI {
     pub fn render(&mut self) -> &Vec<Drawable> {
         let now = std::time::Instant::now();
 
-        Self::layout(&self.tree, &mut self.elements, self.root);
+        let mut layout = Layout {
+            fonts: &self.fonts,
+            tree: &self.tree,
+            elements: &mut self.elements,
+        };
+        layout.layout(self.root);
+
         self.drawables.clear();
         Self::render_element(
             &self.tree,
@@ -290,7 +370,7 @@ pub struct UIBuilder<'a> {
 }
 
 impl<'a> UIBuilder<'a> {
-    fn add_container(&self, element_type: ElementType) -> Self {
+    pub fn add(&self, element_type: ElementType) -> Self {
         let new_container = self
             .ui
             .borrow_mut()
@@ -302,38 +382,42 @@ impl<'a> UIBuilder<'a> {
     }
 
     pub fn row(&self) -> Self {
-        self.add_container(ElementType::Row)
+        self.add(ElementType::Row)
     }
 
     pub fn reverse_row(&self) -> Self {
-        self.add_container(ElementType::ReverseRow)
+        self.add(ElementType::ReverseRow)
     }
 
     pub fn evenly_spaced_row(&self) -> Self {
-        self.add_container(ElementType::EvenlySpacedRow)
+        self.add(ElementType::EvenlySpacedRow)
     }
 
     pub fn column(&self) -> Self {
-        self.add_container(ElementType::Column)
+        self.add(ElementType::Column)
     }
 
-    pub fn stack(&self) -> Self {
-        self.add_container(ElementType::Stack)
+    pub fn expander(&self) -> Self {
+        self.add(ElementType::Expander)
     }
 
     pub fn width(&self, width_pixels: f32) -> Self {
-        self.add_container(ElementType::Width(width_pixels))
+        self.add(ElementType::Width(width_pixels))
     }
 
     pub fn padding(&self, padding: f32) -> Self {
-        self.add_container(ElementType::Padding(padding))
+        self.add(ElementType::Padding(padding))
     }
 
     pub fn height(&self, height_pixels: f32) -> Self {
-        self.add_container(ElementType::Height(height_pixels))
+        self.add(ElementType::Height(height_pixels))
     }
 
     pub fn fill(&self, color: (f32, f32, f32, f32)) -> Self {
-        self.add_container(ElementType::Fill(color))
+        self.add(ElementType::Fill(color))
+    }
+
+    pub fn text(&self, text: &str) -> Self {
+        self.add(ElementType::Text(text.to_owned()))
     }
 }
