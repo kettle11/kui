@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 fontdue = "0.1.2"
+rect_packer = "0.2.1"
 
 [dev-dependencies]
 kapp = { git = "https://github.com/kettle11/kApp"}
