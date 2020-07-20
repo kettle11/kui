@@ -18,15 +18,19 @@ pub enum ElementType {
     /// A container that accepts a single element and pads its width and height
     Padding(f32),
     /// Rows lay out multiple elements in a row.
-    Row,
+    /// Accepts a single value for spacing between elements
+    Row(f32),
     /// Reverse row lay out multiple elements in a row with the opposite alignment.
-    ReverseRow,
+    ReverseRow(f32),
     /// Lays out multiple elements evenly spaced
     EvenlySpacedRow,
     /// Columns lay out multiple elements in a column.
-    Column,
+    /// Accepts a single value for spacing between elements
+    Column(f32),
     /// Unstyled text
     Text(String),
+    /// Specify text size for dependent elements,
+    TextSize(f32),
     /// Centers children vertically in available space
     CenterVertical,
     /// Always takes up maximum available space
@@ -116,7 +120,9 @@ impl UI {
             tree: &self.tree,
             elements: &mut self.elements,
         };
-        layout.layout(self.root);
+        let text_properties = TextProperties::new();
+
+        layout.layout(&text_properties, self.root);
 
         self.drawing_info.drawables.clear();
 
@@ -128,7 +134,11 @@ impl UI {
             drawing_info: &mut self.drawing_info,
         };
 
-        render.render_element((0., 0., self.width, self.height), self.root);
+        render.render_element(
+            &text_properties,
+            (0., 0., self.width, self.height),
+            self.root,
+        );
 
         println!("Time: {:?}", now.elapsed().as_secs_f32());
         self.drawing_info.canvas_width = self.width;
@@ -170,20 +180,26 @@ impl<'a> UIBuilder<'a> {
         }
     }
 
-    pub fn row(&self) -> Self {
-        self.add(ElementType::Row)
+    /// The spacing value specifies spacing between elements.
+    /// Use an empty width container to spacing at the start or end.
+    pub fn row(&self, spacing: f32) -> Self {
+        self.add(ElementType::Row(spacing))
     }
 
-    pub fn reverse_row(&self) -> Self {
-        self.add(ElementType::ReverseRow)
+    /// The spacing value specifies spacing between elements.
+    /// Use an empty height container to spacing at the start or end.
+    pub fn column(&self, spacing: f32) -> Self {
+        self.add(ElementType::Column(spacing))
+    }
+
+    /// The spacing value specifies spacing between elements.
+    /// Use an empty height container to spacing at the start or end.
+    pub fn reverse_row(&self, spacing: f32) -> Self {
+        self.add(ElementType::ReverseRow(spacing))
     }
 
     pub fn evenly_spaced_row(&self) -> Self {
         self.add(ElementType::EvenlySpacedRow)
-    }
-
-    pub fn column(&self) -> Self {
-        self.add(ElementType::Column)
     }
 
     pub fn expander(&self) -> Self {
@@ -212,5 +228,23 @@ impl<'a> UIBuilder<'a> {
 
     pub fn text(&self, text: &str) -> Self {
         self.add(ElementType::Text(text.to_owned()))
+    }
+
+    pub fn text_size(&self, size: f32) -> Self {
+        self.add(ElementType::TextSize(size))
+    }
+}
+
+pub(crate) struct TextProperties {
+    pub(crate) size: f32,
+}
+
+impl TextProperties {
+    pub fn new() -> Self {
+        Self {
+            // 17 * 2. When DPI scaling is added change this to 17.
+            // 17 is the recommended size for buttons on iOS, so a bit arbitrary.
+            size: 34.,
+        }
     }
 }
