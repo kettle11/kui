@@ -86,7 +86,7 @@ impl<'a> Render<'a> {
                 );
                 self.drawing_info.drawables.push(Drawable {
                     rectangle: fill_rectangle,
-                    texture_coordinates: (0., 0.),
+                    texture_rectangle: (0., 0., 0., 0.),
                     color,
                 });
                 // Render all children with the full size of the space.
@@ -119,7 +119,7 @@ impl<'a> Render<'a> {
                     self.render_element(rectangle, child);
                 }
 
-                let font_size = 40.0;
+                let font_size = crate::layout::FONT_SIZE;
                 let text_style = fontdue::layout::TextStyle {
                     text: &text,
                     px: font_size,
@@ -140,18 +140,33 @@ impl<'a> Render<'a> {
                         c.height as u32,
                     );
 
+                    // Fontdue lays out relative to the upper left corner.
+                    // Fontdue's coordinate system is with 0, 0 in the lower left.
+                    let c_rectangle = (
+                        rectangle.0 + c.x as f32,
+                        rectangle.1 + -c.y - texture_rectangle.height as f32, // Why is this shifting like this?
+                        texture_rectangle.width as f32,
+                        texture_rectangle.height as f32,
+                    );
+
+                    /*
                     self.drawing_info.drawables.push(Drawable {
-                        texture_coordinates: (
+                        texture_rectangle: (0.0, 0.0, 0.0, 0.0),
+                        rectangle: c_rectangle,
+                        color: (1.0, 0.1, 0.8, 1.0),
+                    });
+                    */
+
+                    self.drawing_info.drawables.push(Drawable {
+                        texture_rectangle: (
                             texture_rectangle.x as f32 / self.drawing_info.texture.width as f32,
                             texture_rectangle.y as f32 / self.drawing_info.texture.height as f32,
+                            texture_rectangle.width as f32 / self.drawing_info.texture.width as f32,
+                            texture_rectangle.height as f32
+                                / self.drawing_info.texture.height as f32,
                         ),
-                        rectangle: (
-                            rectangle.0 + c.x as f32,
-                            rectangle.1 - c.y - font_size, // Why is this shifting like this?
-                            c.width as f32,
-                            c.height as f32,
-                        ),
-                        color: (0.2, 0.1, 0.8, 1.0),
+                        rectangle: c_rectangle,
+                        color: (1.0, 1.0, 1.0, 1.0),
                     })
                 }
 

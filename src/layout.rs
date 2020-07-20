@@ -2,6 +2,7 @@ use crate::rectangle::Rectangle;
 use crate::tree::{NodeHandle, Tree};
 use crate::ui::{Element, ElementType};
 
+pub const FONT_SIZE: f32 = 32.0;
 /// Layout borrows things from the UI
 pub(crate) struct Layout<'a> {
     pub(crate) fonts: &'a Vec<fontdue::Font>,
@@ -63,7 +64,7 @@ impl<'a> Layout<'a> {
             }
 
             ElementType::Text(text) => {
-                let font_size = 40.;
+                let font_size = FONT_SIZE;
                 let text_style = fontdue::layout::TextStyle {
                     text: &text,
                     px: font_size,
@@ -83,7 +84,7 @@ impl<'a> Layout<'a> {
                         let c_rectangle = Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
                         r.join(c_rectangle)
                     });
-                    (total_rectangle.width, total_rectangle.height)
+                    (total_rectangle.width, font_size)
                 } else {
                     (0., 0.)
                 }

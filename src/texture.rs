@@ -40,9 +40,17 @@ impl Texture {
 
             let rectangle = self.pack_character(c, metrics.width as u32, metrics.height as u32);
 
+            /*
+            use std::fs::File;
+            use std::io::Write;
+
+            let mut o = std::fs::File::create(format!("{:?}.pgm", c.c)).unwrap();
+            let _ = o.write(format!("P5\n{} {}\n255\n", metrics.width, metrics.height).as_bytes());
+            let _ = o.write(&new_data);
+            */
             let mut new_data_index = 0;
-            for j in rectangle.x..rectangle.x + rectangle.width {
-                for i in rectangle.y..rectangle.y + rectangle.height {
+            for j in rectangle.y..(rectangle.y + rectangle.height) {
+                for i in rectangle.x..(rectangle.x + rectangle.width) {
                     self.data[(j * self.width + i) as usize] = new_data[new_data_index];
                     new_data_index += 1;
                 }

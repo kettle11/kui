@@ -55,6 +55,8 @@ impl UI {
             width: 0.0,
             height: 0.0,
             drawing_info: DrawingInfo {
+                canvas_width: 0.0,
+                canvas_height: 0.0,
                 drawables: Vec::new(),
                 texture: Texture::new(512),
             },
@@ -102,7 +104,7 @@ impl UI {
         self.height = height;
     }
 
-    pub fn render(&mut self) -> &Vec<Drawable> {
+    pub fn render(&mut self) -> &DrawingInfo {
         let now = std::time::Instant::now();
 
         // First layout the elements.
@@ -127,19 +129,22 @@ impl UI {
         render.render_element((0., 0., self.width, self.height), self.root);
 
         println!("Time: {:?}", now.elapsed().as_secs_f32());
-
-        &self.drawing_info.drawables
+        self.drawing_info.canvas_width = self.width;
+        self.drawing_info.canvas_height = self.height;
+        &self.drawing_info
     }
 }
 
 #[derive(Debug)]
 pub struct Drawable {
     pub rectangle: (f32, f32, f32, f32),
-    pub texture_coordinates: (f32, f32),
+    pub texture_rectangle: (f32, f32, f32, f32),
     pub color: (f32, f32, f32, f32),
 }
 
 pub struct DrawingInfo {
+    pub canvas_width: f32,
+    pub canvas_height: f32,
     pub texture: crate::texture::Texture,
     pub drawables: Vec<Drawable>,
 }
