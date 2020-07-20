@@ -114,6 +114,16 @@ impl<'a> Render<'a> {
                 }
                 (rectangle.2, rectangle.3)
             }
+            ElementType::CenterVertical => {
+                let center = rectangle.3 / 2.0;
+                for child in self.tree.child_iter(node) {
+                    let child_size = self.elements[child.0].size;
+                    let y = center - child_size.1 / 2.0;
+                    let render_rect = (rectangle.0, y, rectangle.2, child_size.1);
+                    self.render_element(render_rect, child);
+                }
+                (element_width, element_height)
+            }
             ElementType::Text(ref text) => {
                 for child in self.tree.child_iter(node) {
                     self.render_element(rectangle, child);
@@ -170,7 +180,7 @@ impl<'a> Render<'a> {
                     })
                 }
 
-                (rectangle.2, rectangle.3)
+                (element_width, element_height)
             }
             _ => unimplemented!("Unimplemented element: {:?}", element.element_type),
         }

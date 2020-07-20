@@ -89,10 +89,12 @@ impl<'a> Layout<'a> {
                     (0., 0.)
                 }
             }
-            ElementType::Fill(..) => self.tree.child_iter(node).fold((0., 0.), |s, n| {
-                let child_size = self.layout(n);
-                (s.0.max(child_size.0), s.1.max(child_size.1))
-            }),
+            ElementType::Fill(..) | ElementType::CenterVertical => {
+                self.tree.child_iter(node).fold((0., 0.), |s, n| {
+                    let child_size = self.layout(n);
+                    (s.0.max(child_size.0), s.1.max(child_size.1))
+                })
+            }
             ElementType::Expander => {
                 self.independent_layout(node);
                 (f32::MAX, f32::MAX)

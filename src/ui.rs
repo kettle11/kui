@@ -27,6 +27,8 @@ pub enum ElementType {
     Column,
     /// Unstyled text
     Text(String),
+    /// Centers children vertically in available space
+    CenterVertical,
     /// Always takes up maximum available space
     Expander,
 }
@@ -202,6 +204,10 @@ impl<'a> UIBuilder<'a> {
 
     pub fn fill(&self, color: (f32, f32, f32, f32)) -> Self {
         self.add(ElementType::Fill(color))
+    }
+
+    pub fn center_vertical(&self) -> Self {
+        self.add(ElementType::CenterVertical)
     }
 
     pub fn text(&self, text: &str) -> Self {
