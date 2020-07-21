@@ -1,6 +1,6 @@
 #[derive(Debug)]
 
-struct Node {
+pub(crate) struct Node {
     parent: Option<NodeHandle>,
     next_sibling: Option<NodeHandle>,
     previous_sibling: Option<NodeHandle>,
@@ -13,7 +13,7 @@ pub struct NodeHandle(pub(crate) usize);
 
 #[derive(Debug)]
 pub struct Tree {
-    nodes: Vec<Node>,
+    pub(crate) nodes: Vec<Node>,
     available_nodes: Vec<NodeHandle>,
 }
 
