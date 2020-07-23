@@ -4,13 +4,13 @@ use crate::tree::{NodeHandle, Tree};
 use crate::ui::{Element, ElementType, TextProperties};
 
 /// Layout borrows things from the UI
-pub(crate) struct Layout<'a, T> {
+pub(crate) struct Layout<'a> {
     pub(crate) fonts: &'a Vec<fontdue::Font>,
     pub(crate) tree: &'a Tree,
-    pub(crate) elements: &'a mut Vec<Element<T>>,
+    pub(crate) elements: &'a mut Vec<Element>,
 }
 
-impl<'a, T> Layout<'a, T> {
+impl<'a> Layout<'a> {
     /// Lays out children and returns their total width and height.
     fn layout_children(
         &mut self,

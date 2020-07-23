@@ -5,7 +5,7 @@ use crate::rectangle::Rectangle;
 use crate::render::Render;
 use crate::texture::Texture;
 use crate::tree::{NodeHandle, Tree};
-
+use crate::widget::{Widget, WidgetCallback};
 pub type ElementHandle = NodeHandle;
 
 #[derive(Copy, Clone, Debug)]
@@ -25,6 +25,13 @@ impl TextProperties {
             font: None,
         }
     }
+}
+
+pub struct EventContext<'a, 'b, T> {
+    pub data: &'b mut T,
+    pub event: UIEvent,
+    pub node: NodeHandle,
+    pub ui: &'a mut UI<T>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -66,17 +73,16 @@ pub enum ElementType {
     Fit,
 }
 
-pub struct Element<T> {
+pub struct Element {
     pub element_type: ElementType,
-    pub event_handler: Option<Box<dyn FnMut(UIEvent, &mut T, NodeHandle, &mut UI<T>)>>,
     pub rectangle: Rectangle,
-    phantom: std::marker::PhantomData<T>,
 }
 
 pub struct UI<T> {
     tree: Tree,
     root: NodeHandle,
-    elements: Vec<Element<T>>,
+    elements: Vec<Element>,
+    widget_callbacks: Vec<Option<WidgetCallback<T>>>,
     width: f32,
     height: f32,
     drawing_info: DrawingInfo,
@@ -90,6 +96,7 @@ impl<T> UI<T> {
         let mut ui = Self {
             tree: Tree::new(),
             elements: Vec::new(),
+            widget_callbacks: Vec::new(),
             root: NodeHandle(0),
             width: 0.0,
             height: 0.0,
@@ -122,14 +129,14 @@ impl<T> UI<T> {
         let new_handle = self.tree.add(parent);
         let element = Element {
             element_type,
-            event_handler: None,
             rectangle: Rectangle::zero(),
-            phantom: std::marker::PhantomData,
         };
         // If the tree has allocated a new index, push the element there.
         if new_handle.0 >= self.elements.len() {
+            self.widget_callbacks.push(None);
             self.elements.push(element)
         } else {
+            self.widget_callbacks[new_handle.0] = None;
             self.elements[new_handle.0] = element;
         }
         new_handle
@@ -137,16 +144,18 @@ impl<T> UI<T> {
 
     pub fn edit(&mut self) -> UIBuilder<T> {
         let root = self.root;
+        self.tree.remove(self.root);
+        self.root = self.add(ElementType::Expander, None);
         UIBuilder {
             ui: Rc::new(RefCell::new(self)),
-            current_container: Some(root),
+            parent: Some(root),
         }
     }
 
     pub fn edit_element(&mut self, node: NodeHandle) -> UIBuilder<T> {
         UIBuilder {
             ui: Rc::new(RefCell::new(self)),
-            current_container: Some(node),
+            parent: Some(node),
         }
     }
 
@@ -193,32 +202,33 @@ impl<T> UI<T> {
 
     fn find_touched_nodes_with_handlers(
         &self,
-        contained_nodes: &mut Vec<NodeHandle>,
+        event: UIEvent,
+        data: &mut T,
         node: NodeHandle,
         x: f32,
         y: f32,
     ) {
         if self.elements[node.0].rectangle.contains(x, y) {
-            if self.elements[node.0].event_handler.is_some() {
-                contained_nodes.push(node);
+            if let Some(callback) = &self.widget_callbacks[node.0] {
+                callback.event(data, event);
             }
+
             for child in self.tree.child_iter(node) {
-                self.find_touched_nodes_with_handlers(contained_nodes, child, x, y);
+                self.find_touched_nodes_with_handlers(event, data, child, x, y);
             }
         }
     }
-
     /// Move the mouse and trigger any potential events.
     pub fn move_mouse(&mut self, x: f32, y: f32, data: &mut T) {
-        let mut nodes = Vec::new();
-        self.find_touched_nodes_with_handlers(&mut nodes, self.root, x, y);
-        for node in nodes {
-            let mut handler = self.elements[node.0].event_handler.take().unwrap();
-            (handler)(UIEvent::Hover, data, node, self);
-            if self.elements[node.0].event_handler.is_none() {
-                self.elements[node.0].event_handler = Some(handler);
-            }
-        }
+        self.mouse_x = x;
+        self.mouse_y = y;
+        self.find_touched_nodes_with_handlers(UIEvent::Hover, data, self.root, x, y);
+    }
+
+    pub fn mouse_down(&mut self, x: f32, y: f32, data: &mut T) {
+        self.mouse_x = x;
+        self.mouse_y = y;
+        self.find_touched_nodes_with_handlers(UIEvent::Press, data, self.root, x, y);
     }
 
     pub fn log_tree(&self) {
@@ -246,27 +256,20 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub struct UIBuilder<'a, T> {
     ui: Rc<RefCell<&'a mut UI<T>>>,
-    current_container: Option<NodeHandle>,
+    parent: Option<NodeHandle>,
 }
 
 impl<'a, T> UIBuilder<'a, T> {
     pub fn add(&self, element_type: ElementType) -> Self {
-        let new_container = self
-            .ui
-            .borrow_mut()
-            .add(element_type, self.current_container);
+        let new_container = self.ui.borrow_mut().add(element_type, self.parent);
         UIBuilder {
             ui: self.ui.clone(),
-            current_container: Some(new_container),
+            parent: Some(new_container),
         }
     }
 
-    pub fn event_handler<F>(&self, event_handler: F)
-    where
-        F: FnMut(UIEvent, &mut T, NodeHandle, &mut UI<T>) + 'static,
-    {
-        let e = &mut self.ui.borrow_mut().elements[self.current_container.unwrap().0].event_handler;
-        *e = Some(Box::new(event_handler));
+    pub fn handle(&self) -> NodeHandle {
+        self.parent.unwrap()
     }
 
     pub fn row(&self) -> Self {
@@ -340,5 +343,15 @@ impl<'a, T> UIBuilder<'a, T> {
 
     pub fn fit(&self) -> Self {
         self.add(ElementType::Fit)
+    }
+
+    /// Passed in widget_path and the widget must refer to the same widget.
+    pub fn add_widget<W: Widget<T>>(
+        &self,
+        widget: &W,
+        widget_path: fn(&mut T) -> &mut dyn Widget<T>,
+    ) {
+        let node = widget.build(self);
+        self.ui.borrow_mut().widget_callbacks[node.0] = Some(WidgetCallback(widget_path));
     }
 }

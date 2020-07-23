@@ -17,7 +17,7 @@ impl Rectangle {
     }
 
     pub fn contains(&self, x: f32, y: f32) -> bool {
-        x > self.x && x < x + self.width && y > self.y && y < self.y + self.height
+        x > self.x && x < self.x + self.width && y > self.y && y < self.y + self.height
     }
 
     pub fn width_height(&self) -> (f32, f32) {

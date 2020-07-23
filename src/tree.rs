@@ -71,12 +71,12 @@ impl Tree {
     fn remove_descendents(
         nodes: &Vec<Node>,
         available_nodes: &mut Vec<NodeHandle>,
-        node: NodeHandle,
+        parent: NodeHandle,
     ) {
         // Iterate all descendents and push their index to the free indices.
         // No need to unhook them as their parent will be disconnected.
         let iterator = TreeSiblingIterator {
-            node: Some(node),
+            node: nodes[parent.0].first_child,
             nodes,
         };
         for child in iterator {
@@ -88,7 +88,6 @@ impl Tree {
     pub fn remove(&mut self, node_handle: NodeHandle) {
         let node = self.node(node_handle);
 
-        // Only remove the node if it's active
         let next_sibling = node.next_sibling;
         let previous_sibling = node.previous_sibling;
         let parent = node.parent;
@@ -112,6 +111,7 @@ impl Tree {
             }
         }
         Self::remove_descendents(&self.nodes, &mut self.available_nodes, node_handle);
+
         self.available_nodes.push(node_handle);
     }
 

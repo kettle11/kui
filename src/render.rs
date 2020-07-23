@@ -5,14 +5,14 @@ use crate::tree::{NodeHandle, Tree};
 use crate::ui::{Drawable, DrawingInfo, Element, ElementType, TextProperties};
 
 /// Render borrows things from the UI
-pub(crate) struct Render<'a, T> {
+pub(crate) struct Render<'a> {
     pub(crate) fonts: &'a Vec<fontdue::Font>,
     pub(crate) tree: &'a Tree,
-    pub(crate) elements: &'a mut Vec<Element<T>>,
+    pub(crate) elements: &'a mut Vec<Element>,
     pub(crate) drawing_info: &'a mut DrawingInfo,
 }
 
-impl<'a, T> Render<'a, T> {
+impl<'a> Render<'a> {
     pub(crate) fn render_element(
         &mut self,
         text_properties: &TextProperties,
@@ -32,6 +32,8 @@ impl<'a, T> Render<'a, T> {
                 for child in self.tree.child_iter(node) {
                     self.render_element(text_properties, element_rectangle, child);
                 }
+                self.elements[node.0].rectangle = element_rectangle;
+                return;
             }
             ElementType::Row(spacing) => {
                 self.tree.child_iter(node).fold(
