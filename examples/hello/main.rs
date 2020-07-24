@@ -1,5 +1,6 @@
 use glow::*;
 use kapp::*;
+use kui::widgets::*;
 use kui::*;
 
 mod gl_drawer;
@@ -9,6 +10,7 @@ fn main() {
     let mut window_height = 800;
     let window = app
         .new_window()
+        .title("Mail")
         .dimensions(window_width, window_height)
         .build()
         .unwrap();
@@ -29,36 +31,60 @@ fn main() {
     }
 
     let mut ui = UI::new();
-
-    ui.font_from_bytes(&std::fs::read("resources/Inter-Medium.ttf").unwrap());
+    let inter_medium = ui.font_from_bytes(include_bytes!("../../resources/Inter-Medium.ttf")); //&std::fs::read("resources/Inter-Medium.ttf").unwrap());
+    let material_icons =
+        ui.font_from_bytes(include_bytes!("../../resources/MaterialIcons-Regular.ttf")); //&std::fs::read("resources/MaterialIcons-Regular.ttf").unwrap());
     ui.resize(window_width as f32, window_height as f32);
 
-    let red = (1.0, 0.0, 0.0, 1.0);
-    let blue = (0.0, 0.0, 1.0, 1.0);
-    let light_gray0 = (0.6, 0.6, 0.6, 1.0);
-    let light_gray1 = (0.5, 0.5, 0.5, 1.0);
+    const GRAY: (f32, f32, f32, f32) = (0.6, 0.6, 0.6, 1.0);
 
-    let gray = (0.28, 0.28, 0.28, 1.0);
-
-    let body = ui.edit();
-    let nav = body.fill(gray).height(74.).expander();
-    let nav_left = nav.row();
-    let nav_right = nav.reverse_row();
-
-    fn button(ui: &UIBuilder, text: &str) {
-        ui.padding(20.0).text(text);
+    struct UIData {
+        font: FontHandle,
+        button0: Button,
+        button1: Button,
+        button2: Button,
+        button3: Button,
+        button4: Button,
     }
-    button(&nav_left, "Line");
-    button(&nav_left, "Extrude");
-    button(&nav_right, "Layers");
 
-    /*
-    let nav_right = nav.reverse_row();
-    for _ in 0..3 {
-        let button = nav_right.padding(20.).row();
-        button.width(60.).fill(red); // Icon
-        button.width(200.).fill(blue); // Icon
-    }*/
+    let mut ui_data = UIData {
+        font: inter_medium,
+        button0: Button::new("Click me!"),
+        button1: Button::new("Click me too!"),
+        button2: Button::new("Another button"),
+        button3: Button::new("Yet Another"),
+        button4: Button::new("Last Button"),
+    };
+
+    fn build_ui(ui: &mut UI<UIData>, data: &mut UIData) {
+        let ui = ui.edit(data);
+        let parent = ui
+            .fit()
+            .font(ui.data().font)
+            .height(400. as f32)
+            .expander()
+            .fill(GRAY)
+            .spaced_row(40.);
+
+        parent
+            .center_vertical()
+            .add_widget(|data| &mut data.button0);
+
+        parent
+            .center_vertical()
+            .add_widget(|data| &mut data.button1);
+        parent
+            .center_vertical()
+            .add_widget(|data| &mut data.button2);
+        parent
+            .center_vertical()
+            .add_widget(|data| &mut data.button3);
+        parent
+            .center_vertical()
+            .add_widget(|data| &mut data.button4);
+    }
+
+    build_ui(&mut ui, &mut ui_data);
 
     let mut gl_drawer = gl_drawer::GLDrawer::new(&gl);
     event_loop.run(move |event| match event {
@@ -74,15 +100,35 @@ fn main() {
             ui.resize(width as f32, height as f32);
             window.request_redraw();
         }
-        Event::MouseMoved { x, y, .. } => {}
+        Event::MouseMoved { x, y, .. } => {
+            ui.pointer_move(x, y, &mut ui_data);
+            window.request_redraw();
+        }
+        Event::MouseButtonDown { x, y, .. } => {
+            ui.pointer_down(x, y, &mut ui_data);
+            window.request_redraw();
+        }
+        Event::MouseButtonUp { x, y, .. } => {
+            ui.pointer_up(x, y, &mut ui_data);
+            window.request_redraw();
+        }
         Event::Draw { .. } => unsafe {
             gl.clear_color(0.945, 0.945, 0.945, 1.0);
             gl.disable(CULL_FACE);
-
             gl.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
 
+            if ui_data.button0.pressed() {
+                println!("Button pressed");
+            }
+
+            ui.animate(&mut ui_data);
+            build_ui(&mut ui, &mut ui_data);
             let drawables = ui.render();
             gl_drawer.draw(&gl, &drawables);
+
+            if ui.needs_redraw() {
+                window.request_redraw();
+            }
             /*
             for drawable in drawables {
                 let width = (drawable.rectangle.2) as i32;

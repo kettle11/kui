@@ -36,10 +36,14 @@ pub struct EventContext<'a, 'b, T> {
 
 #[derive(Debug, Clone, Copy)]
 pub enum UIEvent {
-    Press,
-    Release,
-    DoublePress,
-    Hover,
+    PointerDown,
+    PointerUp,
+    DoubleClick,
+    PointerHover,
+    PointerExited,
+    GlobalPointerUp,
+    /// Contains delta time in milliseconds since last animation frame
+    AnimationFrame(f32),
 }
 
 #[derive(Debug)]
@@ -87,8 +91,10 @@ pub struct UI<T> {
     height: f32,
     drawing_info: DrawingInfo,
     fonts: Vec<fontdue::Font>,
-    mouse_x: f32,
-    mouse_y: f32,
+    pointer_x: f32,
+    pointer_y: f32,
+    event_manager: EventManager,
+    last_animation_timestamp: Option<std::time::Instant>,
 }
 
 impl<T> UI<T> {
@@ -107,8 +113,10 @@ impl<T> UI<T> {
                 texture: Texture::new(512),
             },
             fonts: Vec::new(),
-            mouse_x: 0.0,
-            mouse_y: 0.0,
+            pointer_x: 0.0,
+            pointer_y: 0.0,
+            event_manager: EventManager::new(),
+            last_animation_timestamp: None,
         };
         ui.add(ElementType::Expander, None);
         ui
@@ -142,15 +150,19 @@ impl<T> UI<T> {
         new_handle
     }
 
-    pub fn edit(&mut self) -> UIBuilder<T> {
+    pub fn edit<'a>(&'a mut self, data: &'a mut T) -> UIBuilder<T> {
         let root = self.root;
+        self.event_manager.clear();
         self.tree.remove(self.root);
         self.root = self.add(ElementType::Expander, None);
         UIBuilder {
             ui: Rc::new(RefCell::new(self)),
+            data: Rc::new(RefCell::new(data)),
             parent: Some(root),
         }
     }
+
+    /*
 
     pub fn edit_element(&mut self, node: NodeHandle) -> UIBuilder<T> {
         UIBuilder {
@@ -158,15 +170,27 @@ impl<T> UI<T> {
             parent: Some(node),
         }
     }
+    */
 
     pub fn resize(&mut self, width: f32, height: f32) {
         self.width = width;
         self.height = height;
     }
 
-    pub fn render(&mut self) -> &DrawingInfo {
-        let now = std::time::Instant::now();
+    pub fn animate(&mut self, data: &mut T) {
+        let elapsed = if let Some(last_time_stamp) = self.last_animation_timestamp {
+            last_time_stamp.elapsed().as_secs_f32() * 1000.
+        } else {
+            0.
+        };
+        // Animation elements listening for animation frames.
+        for node in &self.event_manager.animation_frame {
+            self.send_event_to_node(data, *node, UIEvent::AnimationFrame(elapsed));
+        }
+        self.last_animation_timestamp = Some(std::time::Instant::now());
+    }
 
+    pub fn render(&mut self) -> &DrawingInfo {
         // First layout the elements.
         // Calculate the sizes for various elements.
         let mut layout = Layout {
@@ -194,7 +218,7 @@ impl<T> UI<T> {
             self.root,
         );
 
-        println!("Time: {:?}", now.elapsed().as_secs_f32());
+        //println!("Time: {:?}", now.elapsed().as_secs_f32());
         self.drawing_info.canvas_width = self.width;
         self.drawing_info.canvas_height = self.height;
         &self.drawing_info
@@ -209,30 +233,73 @@ impl<T> UI<T> {
         y: f32,
     ) {
         if self.elements[node.0].rectangle.contains(x, y) {
-            if let Some(callback) = &self.widget_callbacks[node.0] {
-                callback.event(data, event);
-            }
+            self.send_event_to_node(data, node, event);
 
             for child in self.tree.child_iter(node) {
                 self.find_touched_nodes_with_handlers(event, data, child, x, y);
             }
         }
     }
-    /// Move the mouse and trigger any potential events.
-    pub fn move_mouse(&mut self, x: f32, y: f32, data: &mut T) {
-        self.mouse_x = x;
-        self.mouse_y = y;
-        self.find_touched_nodes_with_handlers(UIEvent::Hover, data, self.root, x, y);
+
+    fn deliver_pointer_move_event(
+        &self,
+        data: &mut T,
+        node: NodeHandle,
+        x: f32,
+        y: f32,
+        old_x: f32,
+        old_y: f32,
+    ) {
+        if self.elements[node.0].rectangle.contains(x, y) {
+            self.send_event_to_node(data, node, UIEvent::PointerHover);
+
+            for child in self.tree.child_iter(node) {
+                self.deliver_pointer_move_event(data, child, x, y, old_x, old_y);
+            }
+        } else if self.elements[node.0].rectangle.contains(old_x, old_y) {
+            self.send_event_to_node(data, node, UIEvent::PointerExited);
+            for child in self.tree.child_iter(node) {
+                self.deliver_pointer_move_event(data, child, x, y, old_x, old_y);
+            }
+        }
     }
 
-    pub fn mouse_down(&mut self, x: f32, y: f32, data: &mut T) {
-        self.mouse_x = x;
-        self.mouse_y = y;
-        self.find_touched_nodes_with_handlers(UIEvent::Press, data, self.root, x, y);
+    pub fn send_event_to_node(&self, data: &mut T, node: NodeHandle, event: UIEvent) {
+        if let Some(callback) = &self.widget_callbacks[node.0] {
+            callback.event(data, event);
+        }
+    }
+    /// Move the pointer (mouse or touch) and trigger any potential events.
+    pub fn pointer_move(&mut self, x: f32, y: f32, data: &mut T) {
+        let old_x = self.pointer_x;
+        let old_y = self.pointer_y;
+        self.pointer_x = x;
+        self.pointer_y = y;
+        self.deliver_pointer_move_event(data, self.root, x, y, old_x, old_y);
+    }
+
+    pub fn pointer_down(&mut self, x: f32, y: f32, data: &mut T) {
+        self.pointer_x = x;
+        self.pointer_y = y;
+        self.find_touched_nodes_with_handlers(UIEvent::PointerDown, data, self.root, x, y);
+    }
+
+    pub fn pointer_up(&mut self, x: f32, y: f32, data: &mut T) {
+        self.pointer_x = x;
+        self.pointer_y = y;
+
+        for node in &self.event_manager.global_pointer_up {
+            self.send_event_to_node(data, *node, UIEvent::GlobalPointerUp);
+        }
+        self.find_touched_nodes_with_handlers(UIEvent::PointerUp, data, self.root, x, y);
     }
 
     pub fn log_tree(&self) {
         println!("Nodes: {:?}", self.tree.nodes);
+    }
+
+    pub fn needs_redraw(&self) -> bool {
+        self.event_manager.animation_frame.len() > 0
     }
 }
 
@@ -256,6 +323,7 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub struct UIBuilder<'a, T> {
     ui: Rc<RefCell<&'a mut UI<T>>>,
+    data: Rc<RefCell<&'a mut T>>,
     parent: Option<NodeHandle>,
 }
 
@@ -264,8 +332,13 @@ impl<'a, T> UIBuilder<'a, T> {
         let new_container = self.ui.borrow_mut().add(element_type, self.parent);
         UIBuilder {
             ui: self.ui.clone(),
+            data: self.data.clone(),
             parent: Some(new_container),
         }
+    }
+
+    pub fn data(&self) -> std::cell::Ref<'_, T> {
+        std::cell::Ref::map(self.data.borrow(), |d| &**d)
     }
 
     pub fn handle(&self) -> NodeHandle {
@@ -346,12 +419,48 @@ impl<'a, T> UIBuilder<'a, T> {
     }
 
     /// Passed in widget_path and the widget must refer to the same widget.
-    pub fn add_widget<W: Widget<T>>(
-        &self,
-        widget: &W,
-        widget_path: fn(&mut T) -> &mut dyn Widget<T>,
-    ) {
-        let node = widget.build(self);
-        self.ui.borrow_mut().widget_callbacks[node.0] = Some(WidgetCallback(widget_path));
+    pub fn add_widget(&mut self, widget_path: fn(&mut T) -> &mut dyn Widget<T>) {
+        let data = &mut self.data.borrow_mut();
+        let widget = (widget_path)(data);
+        let (node, event_subscriptions) = widget.build(self);
+
+        if event_subscriptions.local {
+            self.ui.borrow_mut().widget_callbacks[node.0] = Some(WidgetCallback(widget_path));
+        }
+
+        if event_subscriptions.global_pointer_up {
+            self.ui
+                .borrow_mut()
+                .event_manager
+                .global_pointer_up
+                .push(node);
+        }
+
+        if event_subscriptions.animation_frame {
+            self.ui
+                .borrow_mut()
+                .event_manager
+                .animation_frame
+                .push(node);
+        }
+    }
+}
+
+struct EventManager {
+    global_pointer_up: Vec<NodeHandle>,
+    animation_frame: Vec<NodeHandle>,
+}
+
+impl EventManager {
+    pub fn new() -> Self {
+        Self {
+            global_pointer_up: Vec::new(),
+            animation_frame: Vec::new(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.global_pointer_up.clear();
+        self.animation_frame.clear();
     }
 }
