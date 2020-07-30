@@ -7,4 +7,4 @@ mod ui;
 mod widget;
 pub mod widgets;
 pub use ui::*;
-pub use widget::{EventSubscriptions, Widget};
+pub use widget::Widget;

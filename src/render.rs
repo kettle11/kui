@@ -168,6 +168,28 @@ impl<'a> Render<'a> {
                     self.render_element(&text_properties, rectangle, child);
                 }
             }
+            ElementType::PositionHorizontalPercentage(percentage) => {
+                let rectangle = Rectangle::new(
+                    rectangle.x + rectangle.width * percentage,
+                    rectangle.y,
+                    rectangle.width,
+                    rectangle.height,
+                );
+                for child in self.tree.child_iter(node) {
+                    self.render_element(&text_properties, rectangle, child);
+                }
+            }
+            ElementType::PositionHorizontalPixels(pixels) => {
+                let rectangle = Rectangle::new(
+                    rectangle.x + pixels,
+                    rectangle.y,
+                    rectangle.width,
+                    rectangle.height,
+                );
+                for child in self.tree.child_iter(node) {
+                    self.render_element(&text_properties, rectangle, child);
+                }
+            }
             ElementType::Text(ref text) => {
                 if let Some(font) = text_properties.font {
                     let text_style = fontdue::layout::TextStyle {

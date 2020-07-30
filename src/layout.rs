@@ -74,12 +74,15 @@ impl<'a> Layout<'a> {
                 };
                 self.layout_children(&text_properties, node)
             }
-            ElementType::Fill(..) | ElementType::CenterVertical => {
-                self.layout_children(text_properties, node)
-            }
             ElementType::Expander => {
                 self.layout_children(text_properties, node);
                 (f32::MAX, f32::MAX)
+            }
+            ElementType::Fill(..)
+            | ElementType::CenterVertical
+            | ElementType::PositionHorizontalPercentage(_)
+            | ElementType::PositionHorizontalPixels(_) => {
+                self.layout_children(text_properties, node)
             }
             ElementType::Text(ref text) => {
                 if let Some(font) = text_properties.font {

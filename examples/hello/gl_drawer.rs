@@ -203,10 +203,6 @@ impl GLDrawer {
             gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_MIN_FILTER, LINEAR as i32);
             gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_MAG_FILTER, LINEAR as i32);
 
-            println!(
-                "Texture width: {:?}, Texture height: {:?}",
-                drawing_info.texture.width, drawing_info.texture.height
-            );
             gl.tex_image_2d(
                 TEXTURE_2D,
                 0,
@@ -238,7 +234,7 @@ impl GLDrawer {
             gl.uniform_1_i32(self.render_data.texture_atlas_uniform.as_ref(), 0);
             panic_if_error(gl);
 
-            println!("Drawing: {:?}", index_count);
+            //s  println!("Drawing: {:?}", index_count);
             gl.draw_elements(TRIANGLES, index_count as i32, UNSIGNED_INT, 0);
             panic_if_error(gl);
         }
@@ -256,7 +252,6 @@ fn panic_if_error(gl: &Context) {
 unsafe fn slice_to_bytes<T>(t: &[T]) -> &[u8] {
     let ptr = t.as_ptr() as *const u8;
     let size = std::mem::size_of::<T>() * t.len();
-    println!("Size: {:?}", size);
     std::slice::from_raw_parts(ptr, size)
 }
 

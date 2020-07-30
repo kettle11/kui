@@ -38,55 +38,68 @@ fn main() {
 
     const GRAY: (f32, f32, f32, f32) = (0.6, 0.6, 0.6, 1.0);
 
-    struct UIData {
+    struct MainView {
         font: FontHandle,
-        button0: Button,
-        button1: Button,
-        button2: Button,
-        button3: Button,
-        button4: Button,
+        button: Button,
+        slider: Slider,
+        element: Option<ElementHandle>,
     }
 
-    let mut ui_data = UIData {
+    let mut main_view = MainView {
         font: inter_medium,
-        button0: Button::new("Click me!"),
-        button1: Button::new("Click me too!"),
-        button2: Button::new("Another button"),
-        button3: Button::new("Yet Another"),
-        button4: Button::new("Last Button"),
+        button: Button::new("Click me"),
+        slider: Slider::new(),
+        element: None,
     };
 
-    fn build_ui(ui: &mut UI<UIData>, data: &mut UIData) {
-        let ui = ui.edit(data);
-        let parent = ui
-            .fit()
-            .font(ui.data().font)
-            .height(400. as f32)
-            .expander()
-            .fill(GRAY)
-            .spaced_row(40.);
+    impl Widget for MainView {
+        fn build(&mut self, parent: &UIBuilder) {
+            let top = parent.font(self.font).height(100.).expander().fill(GRAY);
+            // self.button.build(&top);
+            self.slider.build(&top);
+            self.element = Some(top.handle());
+        }
 
-        parent
-            .center_vertical()
-            .add_widget(|data| &mut data.button0);
-
-        parent
-            .center_vertical()
-            .add_widget(|data| &mut data.button1);
-        parent
-            .center_vertical()
-            .add_widget(|data| &mut data.button2);
-        parent
-            .center_vertical()
-            .add_widget(|data| &mut data.button3);
-        parent
-            .center_vertical()
-            .add_widget(|data| &mut data.button4);
+        fn event(&mut self, ui: &mut UI, event: UIEvent) {
+            //self.button.event(ui, event);
+            self.slider.event(ui, event);
+        }
     }
 
-    build_ui(&mut ui, &mut ui_data);
+    struct ToolBar<T: Widget> {
+        children: Vec<T>,
+        element: Option<ElementHandle>,
+    }
+
+    impl<T: Widget> ToolBar<T> {
+        pub fn new(children: Vec<T>) -> Self {
+            Self {
+                children,
+                element: None,
+            }
+        }
+    }
+
+    impl<T: Widget> Widget for ToolBar<T> {
+        fn build(&mut self, parent: &UIBuilder) {
+            let top = parent.height(100.).expander().fill(GRAY).row();
+            for child in &mut self.children {
+                child.build(&top);
+            }
+            self.element = Some(top.handle());
+        }
+
+        fn event(&mut self, ui: &mut UI, event: UIEvent) {
+            for child in &mut self.children {
+                child.event(ui, event);
+            }
+        }
+    }
+
+    ui.build(&mut main_view);
 
     let mut gl_drawer = gl_drawer::GLDrawer::new(&gl);
+
     event_loop.run(move |event| match event {
         Event::WindowCloseRequested { .. } => app.quit(),
         Event::WindowResized { width, height, .. } => {
@@ -101,15 +114,15 @@ fn main() {
             window.request_redraw();
         }
         Event::MouseMoved { x, y, .. } => {
-            ui.pointer_move(x, y, &mut ui_data);
+            ui.pointer_move(&mut main_view, x, y);
             window.request_redraw();
         }
         Event::MouseButtonDown { x, y, .. } => {
-            ui.pointer_down(x, y, &mut ui_data);
+            ui.pointer_down(&mut main_view, x, y);
             window.request_redraw();
         }
         Event::MouseButtonUp { x, y, .. } => {
-            ui.pointer_up(x, y, &mut ui_data);
+            ui.pointer_up(&mut main_view, x, y);
             window.request_redraw();
         }
         Event::Draw { .. } => unsafe {
@@ -117,38 +130,15 @@ fn main() {
             gl.disable(CULL_FACE);
             gl.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
 
-            if ui_data.button0.pressed() {
-                println!("Button pressed");
-            }
+            ui.animate(&mut main_view);
 
-            ui.animate(&mut ui_data);
-            build_ui(&mut ui, &mut ui_data);
+            ui.build(&mut main_view);
             let drawables = ui.render();
             gl_drawer.draw(&gl, &drawables);
 
             if ui.needs_redraw() {
                 window.request_redraw();
             }
-            /*
-            for drawable in drawables {
-                let width = (drawable.rectangle.2) as i32;
-                let height = (drawable.rectangle.3) as i32;
-
-                let x = (drawable.rectangle.0) as i32;
-                let y = (window_height as f32 - drawable.rectangle.1 - drawable.rectangle.3) as i32;
-
-                gl.scissor(x, y, width, height);
-
-                gl.clear_color(
-                    drawable.color.0,
-                    drawable.color.1,
-                    drawable.color.2,
-                    drawable.color.3,
-                );
-
-                gl.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
-            }
-            */
 
             gl_context.swap_buffers();
         },
