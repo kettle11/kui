@@ -1,8 +1,9 @@
+use super::interpolation::*;
 use crate::ui::{ElementHandle, UIBuilder, UIEvent, UI};
 use crate::widget::Widget;
-
 pub const HANDLE_COLOR: (f32, f32, f32, f32) = (0.32, 0.32, 0.32, 1.0);
 pub const SLIDER_COLOR: (f32, f32, f32, f32) = (0.74, 0.74, 0.74, 1.0);
+pub const SLIDER_FILLED_COLOR: (f32, f32, f32, f32) = (0.3, 0.3, 0.3, 1.0);
 
 pub struct Slider {
     dragging_handle: bool,
@@ -11,6 +12,8 @@ pub struct Slider {
     handle: Option<ElementHandle>,
     bar: Option<ElementHandle>,
     element: Option<ElementHandle>,
+    hover_animate: Interpolate,
+    hovering_handle: bool,
 }
 
 impl Slider {
@@ -23,6 +26,8 @@ impl Slider {
             handle: None,
             bar: None,
             element: None,
+            hover_animate: Interpolate::new(InterpolationCurve::Ease),
+            hovering_handle: false,
         }
     }
 
@@ -36,27 +41,28 @@ impl Slider {
 
 impl Widget for Slider {
     fn build(&mut self, parent: &UIBuilder) {
+        let bar_height = 12.;
         // Just using the  parent here is probably incorrect.
         let top = parent.fit();
         let bar = top
             .horizontal_expander()
-            .padding(20.)
-            .height(20.)
-            .rounded_fill(SLIDER_COLOR, 10.);
+            .padding(30.)
+            .height(bar_height)
+            .rounded_fill(SLIDER_COLOR, bar_height / 2.);
 
         let _filled_bar = bar
-            .width(self.handle_position * 400.)
-            .height(20.)
-            .rounded_fill((0.0, 0.0, 1.0, 1.0), 10.);
+            .width_percentage(self.handle_position)
+            .height(bar_height)
+            .rounded_fill(SLIDER_FILLED_COLOR, bar_height / 2.);
 
-        let handle_size = 40.;
+        let handle_size = 26. + self.hover_animate.get() * 10.;
         let handle = bar
             .center_vertical()
             .position_horizontal_percentage(self.handle_position)
             .position_horizontal_pixels(-handle_size / 2.)
             .width(handle_size)
             .height(handle_size)
-            .rounded_fill(HANDLE_COLOR, handle_size / 2.);
+            .rounded_fill(SLIDER_FILLED_COLOR, handle_size / 2.);
 
         self.bar = Some(bar.handle());
         self.handle = Some(handle.handle());
@@ -65,6 +71,17 @@ impl Widget for Slider {
 
     fn event(&mut self, ui: &mut UI, event: UIEvent) {
         match event {
+            UIEvent::AnimationFrame(delta) => {
+                let animation_speed = 100.;
+                if self.dragging_handle {
+                    self.hover_animate.add(delta / animation_speed);
+                } else {
+                    self.hover_animate.subtract(delta / animation_speed);
+                }
+                if self.hover_animate.not_one_or_zero() {
+                    ui.request_animation_frame();
+                }
+            }
             UIEvent::PointerDown => {
                 if ui.pointer_in_element(self.element.unwrap()) {
                     let slider_rectangle = ui.element_rectangle(self.bar.unwrap());
@@ -88,6 +105,11 @@ impl Widget for Slider {
                         .max(0.0);
 
                     self.handle_position = x_difference;
+                }
+                if ui.pointer_in_element(self.handle.unwrap()) {
+                    self.hovering_handle = true;
+                } else {
+                    self.hovering_handle = false;
                 }
             }
             _ => {}

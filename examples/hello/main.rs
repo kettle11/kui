@@ -17,7 +17,7 @@ fn main() {
     println!("Hello, world!");
 
     // Create a GLContext
-    let mut gl_context = GLContext::new().build().unwrap();
+    let mut gl_context = GLContext::new().samples(4).build().unwrap();
     gl_context.set_window(Some(&window)).unwrap();
 
     #[cfg(target_arch = "wasm32")]
@@ -40,23 +40,27 @@ fn main() {
 
     struct MainView {
         font: FontHandle,
-        button: Button,
-        slider: Slider,
-        element: Option<ElementHandle>,
+        vertical_divider: VerticalDivider<Button, Slider>, // button: Button,
+                                                           // slider: Slider,
+                                                           // element: Option<ElementHandle>
     }
 
     let mut main_view = MainView {
         font: inter_medium,
-        button: Button::new("Click me"),
-        slider: Slider::new(),
-        element: None,
+        //   button: Button::new("Click me"),
+        //   slider: Slider::new(),
+        //   element: None,
+        vertical_divider: VerticalDivider::new(Button::new("Button A"), Slider::new(), 400.),
     };
 
     impl Widget for MainView {
         fn build(&mut self, parent: &UIBuilder) {
+            let top = parent.font(self.font);
+            self.vertical_divider.build(&top);
+            /*
             let top = parent
                 .font(self.font)
-                .height(100.)
+                .height(200.)
                 .expander()
                 .fill(GRAY)
                 .spaced_row(20.);
@@ -66,11 +70,15 @@ fn main() {
             self.slider.build(&top.center_vertical());
             // self.element = Some(top.handle());
             top.width(0.); // For spacing
+            */
         }
 
         fn event(&mut self, ui: &mut UI, event: UIEvent) {
+            self.vertical_divider.event(ui, event);
+            /*
             self.button.event(ui, event);
             self.slider.event(ui, event);
+            */
         }
     }
 

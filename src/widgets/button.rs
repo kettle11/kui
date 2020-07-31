@@ -58,7 +58,7 @@ impl Widget for Button {
             interpolate_color(DEFAULT_COLOR, HOVER_COLOR, self.hover_animate.get())
         };
 
-        let top = parent.fit().handle_events();
+        let top = parent.fit();
         top.rounded_fill(color, 15.)
             .padding(20.)
             .center_vertical()
@@ -69,10 +69,11 @@ impl Widget for Button {
     fn event(&mut self, ui: &mut UI, event: UIEvent) {
         match event {
             UIEvent::AnimationFrame(delta) => {
+                let animation_speed = 100.;
                 if self.pointer_inside {
-                    self.hover_animate.add(delta / 200.);
+                    self.hover_animate.add(delta / animation_speed);
                 } else {
-                    self.hover_animate.subtract(delta / 200.);
+                    self.hover_animate.subtract(delta / animation_speed);
                 }
                 if self.hover_animate.not_one_or_zero() {
                     ui.request_animation_frame();

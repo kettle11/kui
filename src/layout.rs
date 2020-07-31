@@ -40,15 +40,15 @@ impl<'a> Layout<'a> {
                 let (child_width, child_height) = self.layout(text_properties, n);
                 (s.0.max(child_width), s.1 + child_height + spacing)
             }),
-            ElementType::Padding(padding) => {
+            ElementType::Padding(padding_width, padding_height) => {
                 // Padding ensures that the space is requested is at least padding.
                 // Probably padding shouldn't have to walk the tree and should just assume one child.
                 let (children_width, children_height): (f32, f32) =
                     self.layout_children(&text_properties, node);
 
                 (
-                    children_width + padding * 2.,
-                    children_height + padding * 2.,
+                    children_width + padding_width * 2.,
+                    children_height + padding_height * 2.,
                 )
             }
             // The following elements do not rearrange children.
@@ -90,9 +90,8 @@ impl<'a> Layout<'a> {
             | ElementType::RoundedFill(..)
             | ElementType::CenterVertical
             | ElementType::PositionHorizontalPercentage(_)
-            | ElementType::PositionHorizontalPixels(_) => {
-                self.layout_children(text_properties, node)
-            }
+            | ElementType::PositionHorizontalPixels(_)
+            | ElementType::WidthPercentage(_) => self.layout_children(text_properties, node),
             ElementType::Text(ref text) => {
                 if let Some(font) = text_properties.font {
                     let text_style = fontdue::layout::TextStyle {

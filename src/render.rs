@@ -102,6 +102,17 @@ impl<'a> Render<'a> {
                     self.render_element(text_properties, rectangle, child);
                 }
             }
+            ElementType::WidthPercentage(width) => {
+                let rectangle = Rectangle::new(
+                    rectangle.x,
+                    rectangle.y,
+                    rectangle.width * width,
+                    rectangle.height,
+                );
+                for child in self.tree.child_iter(node) {
+                    self.render_element(text_properties, rectangle, child);
+                }
+            }
             ElementType::Height(height) => {
                 let rectangle = Rectangle::new(rectangle.x, rectangle.y, rectangle.width, height);
                 for child in self.tree.child_iter(node) {
@@ -134,12 +145,12 @@ impl<'a> Render<'a> {
                     self.render_element(text_properties, rectangle, child);
                 }
             }
-            ElementType::Padding(padding) => {
+            ElementType::Padding(padding_width, padding_height) => {
                 let padded_rectangle = Rectangle::new(
-                    rectangle.x + padding,
-                    rectangle.y + padding,
-                    rectangle.width - padding * 2.,
-                    rectangle.height - padding * 2.,
+                    rectangle.x + padding_width,
+                    rectangle.y + padding_height,
+                    rectangle.width - padding_width * 2.,
+                    rectangle.height - padding_height * 2.,
                 );
                 for child in self.tree.child_iter(node) {
                     self.render_element(text_properties, padded_rectangle, child);

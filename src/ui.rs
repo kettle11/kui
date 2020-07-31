@@ -51,10 +51,12 @@ pub enum ElementType {
     RoundedFill((f32, f32, f32, f32), (f32, f32, f32, f32)),
     /// A container that accepts a single element and constrains its width
     Width(f32),
+    /// A container that accepts a single element and constrains its width by a percentage
+    WidthPercentage(f32),
     /// A container that accepts a single element and constrains its height
     Height(f32),
     /// A container that accepts a single element and pads its width and height
-    Padding(f32),
+    Padding(f32, f32),
     /// Rows lay out multiple elements in a row.
     /// Accepts a single value for spacing between elements
     Row(f32),
@@ -88,7 +90,6 @@ pub enum ElementType {
 pub struct Element {
     pub element_type: ElementType,
     pub rectangle: Rectangle,
-    pub event_handler: Option<usize>,
 }
 
 pub struct UI {
@@ -146,7 +147,6 @@ impl UI {
         let element = Element {
             element_type,
             rectangle: Rectangle::zero(),
-            event_handler: None,
         };
         // If the tree has allocated a new index, push the element there.
         if new_handle.0 >= self.elements.len() {
@@ -247,6 +247,12 @@ impl UI {
         } else {
             0.
         };
+
+        // Cap animation frames at 33 ms (30 fps) deltas.
+        // This means that at lower framerates things will animate slower.
+        // This also means that after a long period of time the animation will jump forward.
+        // This probably requires a better solution.
+        let elapsed = elapsed.min(33.);
         widget.event(self, UIEvent::AnimationFrame(elapsed));
         self.last_animation_timestamp = Some(std::time::Instant::now());
     }
@@ -370,8 +376,21 @@ impl<'a> UIBuilder<'a> {
         self.add(ElementType::Width(width_pixels))
     }
 
+    /// Percentage of parent
+    pub fn width_percentage(&self, width_percentage: f32) -> Self {
+        self.add(ElementType::WidthPercentage(width_percentage))
+    }
+
     pub fn padding(&self, padding: f32) -> Self {
-        self.add(ElementType::Padding(padding))
+        self.add(ElementType::Padding(padding, padding))
+    }
+
+    pub fn padding_horizontal(&self, padding: f32) -> Self {
+        self.add(ElementType::Padding(padding, 0.))
+    }
+
+    pub fn padding_vertical(&self, padding: f32) -> Self {
+        self.add(ElementType::Padding(0., padding))
     }
 
     pub fn height(&self, height_pixels: f32) -> Self {
@@ -417,11 +436,5 @@ impl<'a> UIBuilder<'a> {
 
     pub fn position_horizontal_pixels(&self, pixels: f32) -> Self {
         self.add(ElementType::PositionHorizontalPixels(pixels))
-    }
-
-    /// The current widget will receive events from this element.
-    pub fn handle_events(self) -> Self {
-        self.ui.borrow_mut().elements[self.parent.unwrap().0].event_handler = self.current_widget;
-        self
     }
 }
