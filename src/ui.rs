@@ -47,6 +47,8 @@ pub enum UIEvent {
 #[derive(Debug)]
 pub enum ElementType {
     Fill((f32, f32, f32, f32)),
+    /// A rounded fill. The first f32s are corner radiuses, the second are colors.
+    RoundedFill((f32, f32, f32, f32), (f32, f32, f32, f32)),
     /// A container that accepts a single element and constrains its width
     Width(f32),
     /// A container that accepts a single element and constrains its height
@@ -75,6 +77,10 @@ pub enum ElementType {
     CenterVertical,
     /// Always takes up maximum available space
     Expander,
+    /// Takes up all horizontal space
+    ExpanderHorizontal,
+    /// Takes up all vertical space
+    ExpanderVertical,
     /// Is the size of its children
     Fit,
 }
@@ -282,6 +288,7 @@ pub struct Drawable {
     pub rectangle: (f32, f32, f32, f32),
     pub texture_rectangle: (f32, f32, f32, f32),
     pub color: (f32, f32, f32, f32),
+    pub radiuses: Option<(f32, f32, f32, f32)>,
 }
 
 pub struct DrawingInfo {
@@ -351,6 +358,14 @@ impl<'a> UIBuilder<'a> {
         self.add(ElementType::Expander)
     }
 
+    pub fn horizontal_expander(&self) -> Self {
+        self.add(ElementType::ExpanderHorizontal)
+    }
+
+    pub fn vertical_expander(&self) -> Self {
+        self.add(ElementType::ExpanderVertical)
+    }
+
     pub fn width(&self, width_pixels: f32) -> Self {
         self.add(ElementType::Width(width_pixels))
     }
@@ -366,6 +381,14 @@ impl<'a> UIBuilder<'a> {
     /// Draw a rectangle that fills the entire available space
     pub fn fill(&self, color: (f32, f32, f32, f32)) -> Self {
         self.add(ElementType::Fill(color))
+    }
+
+    /// Draw a rectangle that fills the entire available space
+    pub fn rounded_fill(&self, color: (f32, f32, f32, f32), radius: f32) -> Self {
+        self.add(ElementType::RoundedFill(
+            (radius, radius, radius, radius),
+            color,
+        ))
     }
 
     pub fn center_vertical(&self) -> Self {

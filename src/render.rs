@@ -26,8 +26,8 @@ impl<'a> Render<'a> {
                 let element_rectangle = Rectangle::new(
                     rectangle.x,
                     rectangle.y,
-                    element_rectangle.width,
-                    element_rectangle.height,
+                    element_rectangle.width.min(rectangle.width),
+                    element_rectangle.height.min(rectangle.height),
                 );
                 for child in self.tree.child_iter(node) {
                     self.render_element(text_properties, element_rectangle, child);
@@ -114,9 +114,22 @@ impl<'a> Render<'a> {
                     rectangle: fill_rectangle,
                     texture_rectangle: (0., 0., 0., 0.),
                     color,
+                    radiuses: None,
                 });
                 // Render all children with the full size of the space.
-                // Although technically should only contain a single child
+                for child in self.tree.child_iter(node) {
+                    self.render_element(text_properties, rectangle, child);
+                }
+            }
+            ElementType::RoundedFill(r, color) => {
+                let fill_rectangle = (rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+                self.drawing_info.drawables.push(Drawable {
+                    rectangle: fill_rectangle,
+                    texture_rectangle: (0., 0., 0., 0.),
+                    color,
+                    radiuses: Some(r),
+                });
+                // Render all children with the full size of the space.
                 for child in self.tree.child_iter(node) {
                     self.render_element(text_properties, rectangle, child);
                 }
@@ -132,7 +145,9 @@ impl<'a> Render<'a> {
                     self.render_element(text_properties, padded_rectangle, child);
                 }
             }
-            ElementType::Expander => {
+            ElementType::Expander
+            | ElementType::ExpanderVertical
+            | ElementType::ExpanderHorizontal => {
                 for child in self.tree.child_iter(node) {
                     self.render_element(text_properties, rectangle, child);
                 }
@@ -247,6 +262,7 @@ impl<'a> Render<'a> {
                             ),
                             rectangle: c_rectangle,
                             color: (1.0, 1.0, 1.0, 1.0),
+                            radiuses: None,
                         })
                     }
                 }
@@ -254,8 +270,7 @@ impl<'a> Render<'a> {
                 for child in self.tree.child_iter(node) {
                     self.render_element(text_properties, rectangle, child);
                 }
-            }
-            _ => unimplemented!("Unimplemented element: {:?}", element.element_type),
+            } //     _ => unimplemented!("Unimplemented element: {:?}", element.element_type),
         }
         self.elements[node.0].rectangle = rectangle;
     }

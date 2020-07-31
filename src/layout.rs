@@ -78,7 +78,16 @@ impl<'a> Layout<'a> {
                 self.layout_children(text_properties, node);
                 (f32::MAX, f32::MAX)
             }
+            ElementType::ExpanderHorizontal => {
+                let (_, height) = self.layout_children(text_properties, node);
+                (f32::MAX, height)
+            }
+            ElementType::ExpanderVertical => {
+                let (width, _) = self.layout_children(text_properties, node);
+                (width, f32::MAX)
+            }
             ElementType::Fill(..)
+            | ElementType::RoundedFill(..)
             | ElementType::CenterVertical
             | ElementType::PositionHorizontalPercentage(_)
             | ElementType::PositionHorizontalPixels(_) => {

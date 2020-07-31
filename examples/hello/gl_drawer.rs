@@ -11,7 +11,50 @@ struct RenderData {
 pub struct GLDrawer {
     render_data: RenderData,
 }
+#[derive(Debug)]
+struct Vec4 {
+    x: f32,
+    y: f32,
+    z: f32,
+    w: f32,
+}
+#[derive(Debug)]
 
+struct Vec2 {
+    x: f32,
+    y: f32,
+}
+#[derive(Debug)]
+
+struct Vertex {
+    position: Vec4,
+    uv: Vec2,
+    color: Vec4,
+}
+
+impl Vertex {
+    pub fn new(
+        position: (f32, f32, f32, f32),
+        uv: (f32, f32),
+        color: (f32, f32, f32, f32),
+    ) -> Self {
+        Vertex {
+            position: Vec4 {
+                x: position.0,
+                y: position.1,
+                z: position.2,
+                w: position.3,
+            },
+            uv: Vec2 { x: uv.0, y: uv.1 },
+            color: Vec4 {
+                x: color.0,
+                y: color.1,
+                z: color.2,
+                w: color.3,
+            },
+        }
+    }
+}
 impl GLDrawer {
     pub fn new(gl: &Context) -> Self {
         panic_if_error(gl);
@@ -76,6 +119,129 @@ impl GLDrawer {
         }
     }
 
+    fn screen_to_gl(x: f32, y: f32, width: f32, height: f32) -> (f32, f32) {
+        ((x / width) * 2.0 - 1.0, ((y / height) * 2.0 - 1.0) * -1.0)
+    }
+
+    fn rounded_rectangle(
+        vertices: &mut Vec<Vertex>,
+        indices: &mut Vec<u32>,
+        drawable: &Drawable,
+        r0: f32,
+        r1: f32,
+        r2: f32,
+        r3: f32,
+        width: f32,
+        height: f32,
+    ) {
+        let rectangle = drawable.rectangle;
+        let center = Self::screen_to_gl(
+            rectangle.0 + rectangle.2 / 2.,
+            rectangle.1 + rectangle.3 / 2.,
+            width,
+            height,
+        );
+
+        let min_radius = (rectangle.2 / 2.).min(rectangle.3 / 2.);
+        let r0 = r0.min(min_radius);
+        let r1 = r1.min(min_radius);
+        let r2 = r2.min(min_radius);
+        let r3 = r3.min(min_radius);
+
+        let c = drawable.color;
+        let center_index = vertices.len() as u32;
+
+        vertices.push(Vertex::new((center.0, center.1, 0., 0.), (0., 0.), c));
+        corner(
+            r0,
+            center_index,
+            (rectangle.0 + r0, rectangle.1 + r0),
+            std::f32::consts::PI,
+            vertices,
+            indices,
+            &drawable.color,
+            width,
+            height,
+        );
+        corner(
+            r1,
+            center_index,
+            (rectangle.0 - r1 + rectangle.2, rectangle.1 + r1),
+            std::f32::consts::PI * 1.5,
+            vertices,
+            indices,
+            &drawable.color,
+            width,
+            height,
+        );
+        corner(
+            r2,
+            center_index,
+            (
+                rectangle.0 - r2 + rectangle.2,
+                rectangle.1 - r2 + rectangle.3,
+            ),
+            std::f32::consts::PI * 2.0,
+            vertices,
+            indices,
+            &drawable.color,
+            width,
+            height,
+        );
+        corner(
+            r3,
+            center_index,
+            (rectangle.0 + r3, rectangle.1 - r3 + rectangle.3),
+            std::f32::consts::PI * 0.5,
+            vertices,
+            indices,
+            &drawable.color,
+            width,
+            height,
+        );
+
+        // Push closing triangle
+        indices.push(center_index);
+        indices.push(vertices.len() as u32 - 1);
+        indices.push(center_index + 1);
+
+        fn corner(
+            radius: f32,
+            center_index: u32,
+            corner_center: (f32, f32),
+            start_angle: f32,
+            vertices: &mut Vec<Vertex>,
+            indices: &mut Vec<u32>,
+            color: &(f32, f32, f32, f32),
+            width: f32,
+            height: f32,
+        ) {
+            let mut angle = start_angle;
+            let steps = 20;
+            let step_amount = (std::f32::consts::PI / 2.0) / steps as f32;
+            for _ in 0..steps {
+                let len = vertices.len() as u32;
+                indices.push(center_index);
+                indices.push(len - 1);
+                indices.push(len);
+
+                let position = GLDrawer::screen_to_gl(
+                    corner_center.0 + angle.cos() * radius,
+                    corner_center.1 + angle.sin() * radius,
+                    width,
+                    height,
+                );
+
+                vertices.push(Vertex::new(
+                    (position.0, position.1, 0., 0.),
+                    (0., 0.),
+                    *color,
+                ));
+                angle += step_amount;
+            }
+        }
+    }
+
     // Does not update the texture yet.
     fn update_data(&mut self, gl: &Context, drawing_info: &DrawingInfo) -> usize {
         panic_if_error(gl);
@@ -83,86 +249,55 @@ impl GLDrawer {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
-        #[derive(Debug)]
-        struct Vec4 {
-            x: f32,
-            y: f32,
-            z: f32,
-            w: f32,
-        }
-        #[derive(Debug)]
-
-        struct Vec2 {
-            x: f32,
-            y: f32,
-        }
-        #[derive(Debug)]
-
-        struct Vertex {
-            position: Vec4,
-            uv: Vec2,
-            color: Vec4,
-        }
-
-        impl Vertex {
-            pub fn new(
-                position: (f32, f32, f32, f32),
-                uv: (f32, f32),
-                color: (f32, f32, f32, f32),
-            ) -> Self {
-                Vertex {
-                    position: Vec4 {
-                        x: position.0,
-                        y: position.1,
-                        z: position.2,
-                        w: position.3,
-                    },
-                    uv: Vec2 { x: uv.0, y: uv.1 },
-                    color: Vec4 {
-                        x: color.0,
-                        y: color.1,
-                        z: color.2,
-                        w: color.3,
-                    },
-                }
-            }
-        }
-
         for drawable in &drawing_info.drawables {
             let vertices_len = vertices.len() as u32;
             let r0 = drawable.rectangle;
 
-            let r = (
-                (r0.0 / drawing_info.canvas_width) * 2.0 - 1.0,
-                ((r0.1 / drawing_info.canvas_height) * 2.0 - 1.0) * -1.0,
-                (r0.2 / drawing_info.canvas_width) * 2.0,
-                (r0.3 / drawing_info.canvas_height) * -2.0,
-            );
+            if let Some((r0, r1, r2, r3)) = drawable.radiuses {
+                Self::rounded_rectangle(
+                    &mut vertices,
+                    &mut indices,
+                    &drawable,
+                    r0,
+                    r1,
+                    r2,
+                    r3,
+                    drawing_info.canvas_width,
+                    drawing_info.canvas_height,
+                );
+            } else {
+                let r = (
+                    (r0.0 / drawing_info.canvas_width) * 2.0 - 1.0,
+                    ((r0.1 / drawing_info.canvas_height) * 2.0 - 1.0) * -1.0,
+                    (r0.2 / drawing_info.canvas_width) * 2.0,
+                    (r0.3 / drawing_info.canvas_height) * -2.0,
+                );
 
-            let t = drawable.texture_rectangle;
+                let t = drawable.texture_rectangle;
 
-            let t0 = (t.0, t.1);
-            let t1 = (t.0, t.1 + t.3);
-            let t2 = (t.0 + t.2, t.1 + t.3);
-            let t3 = (t.0 + t.2, t.1);
+                let t0 = (t.0, t.1);
+                let t1 = (t.0, t.1 + t.3);
+                let t2 = (t.0 + t.2, t.1 + t.3);
+                let t3 = (t.0 + t.2, t.1);
 
-            // println!("t0: {:?}", t0);
-            //  println!("t1: {:?}", t1);
-            //  println!("t2: {:?}", t2);
-            // println!("t3: {:?}", t3);
+                // println!("t0: {:?}", t0);
+                //  println!("t1: {:?}", t1);
+                //  println!("t2: {:?}", t2);
+                // println!("t3: {:?}", t3);
 
-            let c = drawable.color;
-            vertices.push(Vertex::new((r.0, r.1, 0., 0.), t0, c));
-            vertices.push(Vertex::new((r.0, r.1 + r.3, 0., 0.), t1, c));
-            vertices.push(Vertex::new((r.0 + r.2, r.1 + r.3, 0., 0.), t2, c));
-            vertices.push(Vertex::new((r.0 + r.2, r.1, 0., 0.), t3, c));
+                let c = drawable.color;
+                vertices.push(Vertex::new((r.0, r.1, 0., 0.), t0, c));
+                vertices.push(Vertex::new((r.0, r.1 + r.3, 0., 0.), t1, c));
+                vertices.push(Vertex::new((r.0 + r.2, r.1 + r.3, 0., 0.), t2, c));
+                vertices.push(Vertex::new((r.0 + r.2, r.1, 0., 0.), t3, c));
 
-            indices.push(vertices_len + 0);
-            indices.push(vertices_len + 1);
-            indices.push(vertices_len + 2);
-            indices.push(vertices_len + 0);
-            indices.push(vertices_len + 2);
-            indices.push(vertices_len + 3);
+                indices.push(vertices_len + 0);
+                indices.push(vertices_len + 1);
+                indices.push(vertices_len + 2);
+                indices.push(vertices_len + 0);
+                indices.push(vertices_len + 2);
+                indices.push(vertices_len + 3);
+            }
         }
 
         unsafe {

@@ -54,14 +54,22 @@ fn main() {
 
     impl Widget for MainView {
         fn build(&mut self, parent: &UIBuilder) {
-            let top = parent.font(self.font).height(100.).expander().fill(GRAY);
-            // self.button.build(&top);
-            self.slider.build(&top);
-            self.element = Some(top.handle());
+            let top = parent
+                .font(self.font)
+                .height(100.)
+                .expander()
+                .fill(GRAY)
+                .spaced_row(20.);
+
+            top.width(0.); // For spacing
+            self.button.build(&top.center_vertical());
+            self.slider.build(&top.center_vertical());
+            // self.element = Some(top.handle());
+            top.width(0.); // For spacing
         }
 
         fn event(&mut self, ui: &mut UI, event: UIEvent) {
-            //self.button.event(ui, event);
+            self.button.event(ui, event);
             self.slider.event(ui, event);
         }
     }

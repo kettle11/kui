@@ -59,7 +59,7 @@ impl Widget for Button {
         };
 
         let top = parent.fit().handle_events();
-        top.fill(color)
+        top.rounded_fill(color, 15.)
             .padding(20.)
             .center_vertical()
             .text(&self.text);
