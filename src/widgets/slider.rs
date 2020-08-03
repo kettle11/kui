@@ -39,7 +39,7 @@ impl Slider {
     }
 }
 
-impl Widget for Slider {
+impl Slider {
     fn build(&mut self, parent: &UIBuilder) {
         let bar_height = 12.;
         // Just using the  parent here is probably incorrect.
@@ -68,7 +68,8 @@ impl Widget for Slider {
         self.handle = Some(handle.handle());
         self.element = Some(top.handle());
     }
-
+}
+impl Widget for Slider {
     fn event(&mut self, ui: &mut UI, event: UIEvent) {
         match event {
             UIEvent::AnimationFrame(delta) => {

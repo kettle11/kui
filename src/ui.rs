@@ -6,6 +6,8 @@ use crate::render::Render;
 use crate::texture::Texture;
 use crate::tree::{NodeHandle, Tree};
 use crate::widget::Widget;
+use std::any::Any;
+
 pub type ElementHandle = NodeHandle;
 
 #[derive(Copy, Clone, Debug)]
@@ -90,7 +92,10 @@ pub enum ElementType {
 pub struct Element {
     pub element_type: ElementType,
     pub rectangle: Rectangle,
+    pub widget: Option<usize>,
 }
+
+use std::collections::HashMap;
 
 pub struct UI {
     tree: Tree,
@@ -104,6 +109,8 @@ pub struct UI {
     pointer_y: f32,
     last_animation_timestamp: Option<std::time::Instant>,
     animation_frame_requested: bool,
+    widgets: Vec<Option<Box<dyn Widget>>>,
+    widget_id_to_index: HashMap<u64, usize>,
 }
 
 impl UI {
@@ -126,6 +133,8 @@ impl UI {
             pointer_y: 0.0,
             last_animation_timestamp: None,
             animation_frame_requested: false,
+            widgets: Vec::new(),
+            widget_id_to_index: HashMap::new(),
         };
         ui.add(ElementType::Expander, None);
         ui
@@ -147,6 +156,7 @@ impl UI {
         let element = Element {
             element_type,
             rectangle: Rectangle::zero(),
+            widget: None,
         };
         // If the tree has allocated a new index, push the element there.
         if new_handle.0 >= self.elements.len() {
@@ -166,7 +176,6 @@ impl UI {
         UIBuilder {
             ui: Rc::new(RefCell::new(self)),
             parent: Some(root),
-            current_widget: None,
         }
     }
 
@@ -220,26 +229,45 @@ impl UI {
     }
 
     /// Move the pointer (mouse or touch) and trigger any potential events.
-    pub fn pointer_move(&mut self, widget: &mut impl Widget, x: f32, y: f32) {
+    pub fn pointer_move(&mut self, x: f32, y: f32) {
         // let old_x = self.pointer_x;
         // let old_y = self.pointer_y;
         self.pointer_x = x;
         self.pointer_y = y;
-        widget.event(self, UIEvent::PointerMoved);
+        // widget.event(self, UIEvent::PointerMoved);
     }
 
-    pub fn pointer_down(&mut self, widget: &mut impl Widget, x: f32, y: f32) {
+    pub fn pointer_down(&mut self, x: f32, y: f32) {
         self.pointer_x = x;
         self.pointer_y = y;
-        widget.event(self, UIEvent::PointerDown);
+
+        Self::find_touched_nodes_with_handlers(
+            &self.tree,
+            &self.elements,
+            &mut self.widgets,
+            UIEvent::PointerDown,
+            self.root,
+            x,
+            y,
+        );
     }
 
-    pub fn pointer_up(&mut self, widget: &mut impl Widget, x: f32, y: f32) {
+    pub fn pointer_up(&mut self, x: f32, y: f32) {
         self.pointer_x = x;
         self.pointer_y = y;
-        widget.event(self, UIEvent::PointerUp);
+
+        Self::find_touched_nodes_with_handlers(
+            &self.tree,
+            &self.elements,
+            &mut self.widgets,
+            UIEvent::PointerUp,
+            self.root,
+            x,
+            y,
+        );
     }
 
+    /*
     pub fn animate(&mut self, widget: &mut impl Widget) {
         self.animation_frame_requested = false;
         let elapsed = if let Some(last_time_stamp) = self.last_animation_timestamp {
@@ -255,6 +283,40 @@ impl UI {
         let elapsed = elapsed.min(33.);
         widget.event(self, UIEvent::AnimationFrame(elapsed));
         self.last_animation_timestamp = Some(std::time::Instant::now());
+    }
+    */
+
+    fn find_touched_nodes_with_handlers(
+        tree: &Tree,
+        elements: &Vec<Element>,
+        widgets: &mut Vec<Option<Box<dyn Widget>>>,
+        event: UIEvent,
+        node: NodeHandle,
+        x: f32,
+        y: f32,
+    ) {
+        if elements[node.0].rectangle.contains(x, y) {
+            Self::send_event_to_node(elements, widgets, node, event);
+
+            for child in tree.child_iter(node) {
+                Self::find_touched_nodes_with_handlers(tree, elements, widgets, event, child, x, y);
+            }
+        }
+    }
+
+    pub fn send_event_to_node(
+        elements: &Vec<Element>,
+        widgets: &mut Vec<Option<Box<dyn Widget>>>,
+        node: NodeHandle,
+        event: UIEvent,
+    ) {
+        if let Some(widget_index) = elements[node.0].widget {
+            let mut widget = widgets[widget_index].take();
+            if let Some(widget) = widget.as_mut() {
+                widget.event(event);
+            }
+            widgets[widget_index] = widget;
+        }
     }
 
     pub fn element_rectangle(&self, element: ElementHandle) -> Rectangle {
@@ -279,10 +341,12 @@ impl UI {
             .contains(self.pointer_x, self.pointer_y)
     }
 
+    /*
     pub fn build(&mut self, widget: &mut impl Widget) {
         let editor = self.edit();
         widget.build(&editor);
     }
+    */
 
     pub fn log_tree(&self) {
         println!("Nodes: {:?}", self.tree.nodes);
@@ -311,7 +375,6 @@ use std::rc::Rc;
 pub struct UIBuilder<'a> {
     ui: Rc<RefCell<&'a mut UI>>,
     parent: Option<NodeHandle>,
-    current_widget: Option<usize>,
 }
 
 impl<'a> UIBuilder<'a> {
@@ -320,7 +383,6 @@ impl<'a> UIBuilder<'a> {
         UIBuilder {
             ui: self.ui.clone(),
             parent: Some(new_container),
-            current_widget: self.current_widget,
         }
     }
 
@@ -436,5 +498,39 @@ impl<'a> UIBuilder<'a> {
 
     pub fn position_horizontal_pixels(&self, pixels: f32) -> Self {
         self.add(ElementType::PositionHorizontalPixels(pixels))
+    }
+
+    /// This gets an existing widget if cached with the right ID.
+    /// It must be paired with a call to "add_widget" to add it back to the tree.
+    /// This will never deallocate an item for a ID, so if many unique IDs are
+    /// produced memory will increase forever.
+    pub fn get_widget<T: Widget + 'static + Any>(&self, id: u64) -> Box<T> {
+        let mut ui = self.ui.borrow_mut();
+        if let Some(index) = ui.widget_id_to_index.get(&id).copied() {
+            if let Some(widget) = ui.widgets[index].take() {
+                if let Ok(widget) = widget.into_any().downcast::<T>() {
+                    return widget;
+                }
+            }
+        }
+        Box::new(Widget::new())
+    }
+
+    pub fn add_widget<T: Widget + 'static>(&self, id: u64, widget: Box<T>) -> usize {
+        let mut ui = self.ui.borrow_mut();
+        if let Some(index) = ui.widget_id_to_index.get(&id).copied() {
+            ui.widgets[index] = Some(widget);
+            index
+        } else {
+            let index = ui.widgets.len();
+            ui.widgets.push(Some(widget));
+            ui.widget_id_to_index.insert(id, index);
+            index
+        }
+    }
+
+    /// Should accept widget handle instead
+    pub fn add_widget_event_handler(&self, element: ElementHandle, widget: usize) {
+        self.ui.borrow_mut().elements[element.0].widget = Some(widget);
     }
 }

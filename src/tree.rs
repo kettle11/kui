@@ -14,7 +14,7 @@ pub struct NodeHandle(pub(crate) usize);
 #[derive(Debug)]
 pub struct Tree {
     pub(crate) nodes: Vec<Node>,
-    available_nodes: Vec<NodeHandle>,
+    pub(crate) available_nodes: Vec<NodeHandle>,
 }
 
 impl Tree {
@@ -80,8 +80,9 @@ impl Tree {
             nodes,
         };
         for child in iterator {
-            available_nodes.push(child);
             Self::remove_descendents(nodes, available_nodes, child);
+            // Push after removing children so that future allocations have the same order
+            available_nodes.push(child);
         }
     }
 
@@ -111,7 +112,7 @@ impl Tree {
             }
         }
         Self::remove_descendents(&self.nodes, &mut self.available_nodes, node_handle);
-
+        // Push after removing children so that future allocations have the same order
         self.available_nodes.push(node_handle);
     }
 

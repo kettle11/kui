@@ -228,15 +228,11 @@ impl<'a> Render<'a> {
                         ..fontdue::layout::LayoutSettings::default()
                     };
 
-                    /*
-                    self.drawing_info.drawables.push(Drawable {
-                        texture_rectangle: (0.0, 0.0, 0.0, 0.0),
-                        rectangle: (rectangle.0, rectangle.1, element_width, element_height),
-                        color: (1.0, 0.8, 0.8, 1.0),
-                    });
-                    */
                     let mut layout = Vec::new();
                     fontdue::layout::layout_horizontal(&text_style, &layout_settings, &mut layout);
+
+                    // It'd be good to have an option to trim overflow text if it's too long for the container.
+
                     for c in layout {
                         let texture_rectangle = self.drawing_info.texture.get_character(
                             &self.fonts[font.0],
@@ -254,13 +250,6 @@ impl<'a> Render<'a> {
                             texture_rectangle.height as f32,
                         );
 
-                        /*
-                        self.drawing_info.drawables.push(Drawable {
-                            texture_rectangle: (0.0, 0.0, 0.0, 0.0),
-                            rectangle: c_rectangle,
-                            color: (1.0, 0.1, 0.8, 1.0),
-                        });
-                        */
                         self.drawing_info.drawables.push(Drawable {
                             texture_rectangle: (
                                 texture_rectangle.x as f32 / self.drawing_info.texture.width as f32,

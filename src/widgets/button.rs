@@ -1,5 +1,5 @@
 use super::interpolation::*;
-use crate::ui::{ElementHandle, UIBuilder, UIEvent, UI};
+use crate::ui::{ElementHandle, UIBuilder, UIEvent};
 use crate::widget::Widget;
 
 pub const COLOR_DEPRESSED: (f32, f32, f32, f32) = (0.3, 0.3, 0.3, 1.0);
@@ -7,7 +7,6 @@ pub const DEFAULT_COLOR: (f32, f32, f32, f32) = (0.8, 0.8, 0.8, 1.0);
 pub const HOVER_COLOR: (f32, f32, f32, f32) = (0.7, 0.7, 0.7, 1.0);
 
 pub struct Button {
-    pub text: String,
     pressed: bool,
     /// The button is currently held down.
     pointer_held_down: bool,
@@ -17,41 +16,8 @@ pub struct Button {
     element: Option<ElementHandle>,
 }
 
-pub fn interpolate_color(
-    c0: (f32, f32, f32, f32),
-    c1: (f32, f32, f32, f32),
-    t: f32,
-) -> (f32, f32, f32, f32) {
-    (
-        (c1.0 - c0.0) * t + c0.0,
-        (c1.1 - c0.1) * t + c0.1,
-        (c1.2 - c0.2) * t + c0.2,
-        (c1.3 - c0.3) * t + c0.3,
-    )
-}
-
 impl Button {
-    pub fn new(text: &str) -> Self {
-        Self {
-            text: text.to_owned(),
-            pointer_inside: false,
-            pointer_held_down: false,
-            pressed: false,
-            hover_animate: Interpolate::new(InterpolationCurve::Ease),
-            element: None,
-        }
-    }
-
-    /// This function resets when it is called.
-    pub fn pressed(&mut self) -> bool {
-        let b = self.pressed;
-        self.pressed = false;
-        b
-    }
-}
-
-impl Widget for Button {
-    fn build(&mut self, parent: &UIBuilder) {
+    fn build(&mut self, parent: &UIBuilder, text: &'static str) -> ElementHandle {
         let color = if self.pointer_held_down && self.pointer_inside {
             COLOR_DEPRESSED
         } else {
@@ -62,11 +28,24 @@ impl Widget for Button {
         top.rounded_fill(color, 15.)
             .padding(20.)
             .center_vertical()
-            .text(&self.text);
+            .text(text);
         self.element = Some(top.handle());
+        top.handle()
+    }
+}
+
+impl Widget for Button {
+    fn new() -> Self {
+        Self {
+            pointer_inside: false,
+            pointer_held_down: false,
+            pressed: false,
+            hover_animate: Interpolate::new(InterpolationCurve::Ease),
+            element: None,
+        }
     }
 
-    fn event(&mut self, ui: &mut UI, event: UIEvent) {
+    fn event(&mut self, event: UIEvent) {
         match event {
             UIEvent::AnimationFrame(delta) => {
                 let animation_speed = 100.;
@@ -76,20 +55,12 @@ impl Widget for Button {
                     self.hover_animate.subtract(delta / animation_speed);
                 }
                 if self.hover_animate.not_one_or_zero() {
-                    ui.request_animation_frame();
-                }
-            }
-            UIEvent::PointerMoved => {
-                if ui.pointer_in_element(self.element.unwrap()) {
-                    self.pointer_inside = true;
-                } else {
-                    self.pointer_inside = false;
+                    // ui.request_animation_frame();
                 }
             }
             UIEvent::PointerDown => {
-                if ui.pointer_in_element(self.element.unwrap()) {
-                    self.pointer_held_down = true
-                }
+                self.pointer_held_down = true;
+                println!("BUTTON PRESSED");
             }
             UIEvent::PointerUp => {
                 self.pressed = true;
@@ -98,4 +69,14 @@ impl Widget for Button {
             _ => {}
         }
     }
+}
+
+pub fn button(parent: &UIBuilder, id: u64, text: &'static str) -> bool {
+    let mut button: Box<Button> = parent.get_widget(id);
+    let pressed = button.pressed;
+    button.pressed = false; // Reset the pressed value when we're constructed.
+    let element = button.build(parent, text);
+    let widget_handle = parent.add_widget(id, button);
+    parent.add_widget_event_handler(element, widget_handle);
+    pressed
 }

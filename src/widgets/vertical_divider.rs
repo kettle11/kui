@@ -25,6 +25,9 @@ impl<A: Widget, B: Widget> VerticalDivider<A, B> {
 }
 
 impl<A: Widget, B: Widget> Widget for VerticalDivider<A, B> {
+}
+
+impl<A: Widget, B: Widget> Widget for VerticalDivider<A, B> {
     fn build(&mut self, parent: &UIBuilder) {
         let handle_width = 4.;
         let handle_padding = 30.;
