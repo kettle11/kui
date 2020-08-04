@@ -4,7 +4,5 @@ mod render;
 mod texture;
 mod tree;
 mod ui;
-mod widget;
 pub mod widgets;
 pub use ui::*;
-pub use widget::Widget;

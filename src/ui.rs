@@ -5,7 +5,6 @@ use crate::rectangle::Rectangle;
 use crate::render::Render;
 use crate::texture::Texture;
 use crate::tree::{NodeHandle, Tree};
-use crate::widget::Widget;
 use std::any::Any;
 
 pub type ElementHandle = NodeHandle;
@@ -97,56 +96,23 @@ pub struct Element {
 
 use std::collections::HashMap;
 
-pub struct UI {
+pub struct UITree {
     tree: Tree,
     root: NodeHandle,
     elements: Vec<Element>,
-    width: f32,
-    height: f32,
-    drawing_info: DrawingInfo,
-    fonts: Vec<fontdue::Font>,
-    pointer_x: f32,
-    pointer_y: f32,
-    last_animation_timestamp: Option<std::time::Instant>,
-    animation_frame_requested: bool,
-    widgets: Vec<Option<Box<dyn Widget>>>,
-    widget_id_to_index: HashMap<u64, usize>,
 }
 
-impl UI {
+impl UITree {
     pub fn new() -> Self {
-        let mut ui = Self {
+        let mut ui_tree = Self {
             tree: Tree::new(),
             elements: Vec::new(),
-            //widget_callbacks: Vec::new(),
             root: NodeHandle(0),
-            width: 0.0,
-            height: 0.0,
-            drawing_info: DrawingInfo {
-                canvas_width: 0.0,
-                canvas_height: 0.0,
-                drawables: Vec::new(),
-                texture: Texture::new(512),
-            },
-            fonts: Vec::new(),
-            pointer_x: 0.0,
-            pointer_y: 0.0,
-            last_animation_timestamp: None,
-            animation_frame_requested: false,
-            widgets: Vec::new(),
-            widget_id_to_index: HashMap::new(),
         };
-        ui.add(ElementType::Expander, None);
-        ui
+        ui_tree.add(ElementType::Expander, None);
+        ui_tree
     }
 
-    pub fn font_from_bytes(&mut self, bytes: &[u8]) -> FontHandle {
-        let font = fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).unwrap();
-        self.fonts.push(font);
-        FontHandle(self.fonts.len() - 1)
-    }
-
-    /// Directly add an element to the UI tree.
     pub fn add(
         &mut self,
         element_type: ElementType,
@@ -160,19 +126,74 @@ impl UI {
         };
         // If the tree has allocated a new index, push the element there.
         if new_handle.0 >= self.elements.len() {
-            //   self.widget_callbacks.push(None);
             self.elements.push(element)
         } else {
-            //  self.widget_callbacks[new_handle.0] = None;
             self.elements[new_handle.0] = element;
         }
         new_handle
     }
 
-    pub fn edit<'a>(&'a mut self) -> UIBuilder {
-        let root = self.root;
+    pub fn reset(&mut self) {
         self.tree.remove(self.root);
         self.root = self.add(ElementType::Expander, None);
+    }
+}
+
+pub struct UI {
+    // Two UITrees are double buffered.
+    // When a new UITree is being constructed it can query for how user inputs
+    // interacted with the previous UITree.
+    current_ui_tree: UITree,
+    old_ui_tree: UITree,
+    width: f32,
+    height: f32,
+    drawing_info: DrawingInfo,
+    fonts: Vec<fontdue::Font>,
+    pointer_x: f32,
+    pointer_y: f32,
+    pointer_down: bool,
+    last_animation_timestamp: Option<std::time::Instant>,
+    animation_frame_requested: bool,
+    widgets: Vec<Option<Box<dyn Any>>>,
+    widget_id_to_index: HashMap<u64, usize>,
+}
+
+impl UI {
+    pub fn new() -> Self {
+        let mut ui = Self {
+            current_ui_tree: UITree::new(),
+            old_ui_tree: UITree::new(),
+            width: 0.0,
+            height: 0.0,
+            drawing_info: DrawingInfo {
+                canvas_width: 0.0,
+                canvas_height: 0.0,
+                drawables: Vec::new(),
+                texture: Texture::new(512),
+            },
+            fonts: Vec::new(),
+            pointer_x: 0.0,
+            pointer_y: 0.0,
+            pointer_down: false,
+            last_animation_timestamp: None,
+            animation_frame_requested: false,
+            widgets: Vec::new(),
+            widget_id_to_index: HashMap::new(),
+        };
+        // ui.current_ui_tree.add(ElementType::Expander, None);
+        ui
+    }
+
+    pub fn font_from_bytes(&mut self, bytes: &[u8]) -> FontHandle {
+        let font = fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).unwrap();
+        self.fonts.push(font);
+        FontHandle(self.fonts.len() - 1)
+    }
+
+    pub fn edit<'a>(&'a mut self) -> UIBuilder {
+        std::mem::swap(&mut self.old_ui_tree, &mut self.current_ui_tree);
+        self.current_ui_tree.reset();
+        let root = self.current_ui_tree.root;
         UIBuilder {
             ui: Rc::new(RefCell::new(self)),
             parent: Some(root),
@@ -199,32 +220,35 @@ impl UI {
         // Calculate the sizes for various elements.
         let mut layout = Layout {
             fonts: &self.fonts,
-            tree: &self.tree,
-            elements: &mut self.elements,
+            tree: &self.current_ui_tree.tree,
+            elements: &mut self.current_ui_tree.elements,
         };
         let text_properties = TextProperties::new();
 
-        layout.layout(&text_properties, self.root);
+        layout.layout(&text_properties, self.current_ui_tree.root);
 
         self.drawing_info.drawables.clear();
 
         // Then render the final outputs based on the previously calculated sizes.
         let mut render = Render {
             fonts: &self.fonts,
-            tree: &self.tree,
-            elements: &mut self.elements,
+            tree: &self.current_ui_tree.tree,
+            elements: &mut self.current_ui_tree.elements,
             drawing_info: &mut self.drawing_info,
         };
 
         render.render_element(
             &text_properties,
             Rectangle::new(0., 0., self.width, self.height),
-            self.root,
+            self.current_ui_tree.root,
         );
 
         //println!("Time: {:?}", now.elapsed().as_secs_f32());
         self.drawing_info.canvas_width = self.width;
         self.drawing_info.canvas_height = self.height;
+
+        self.pointer_down = false;
+
         &self.drawing_info
     }
 
@@ -240,7 +264,8 @@ impl UI {
     pub fn pointer_down(&mut self, x: f32, y: f32) {
         self.pointer_x = x;
         self.pointer_y = y;
-
+        self.pointer_down = true;
+        /*
         Self::find_touched_nodes_with_handlers(
             &self.tree,
             &self.elements,
@@ -250,12 +275,14 @@ impl UI {
             x,
             y,
         );
+        */
     }
 
     pub fn pointer_up(&mut self, x: f32, y: f32) {
         self.pointer_x = x;
         self.pointer_y = y;
 
+        /*
         Self::find_touched_nodes_with_handlers(
             &self.tree,
             &self.elements,
@@ -265,6 +292,7 @@ impl UI {
             x,
             y,
         );
+        */
     }
 
     /*
@@ -286,43 +314,6 @@ impl UI {
     }
     */
 
-    fn find_touched_nodes_with_handlers(
-        tree: &Tree,
-        elements: &Vec<Element>,
-        widgets: &mut Vec<Option<Box<dyn Widget>>>,
-        event: UIEvent,
-        node: NodeHandle,
-        x: f32,
-        y: f32,
-    ) {
-        if elements[node.0].rectangle.contains(x, y) {
-            Self::send_event_to_node(elements, widgets, node, event);
-
-            for child in tree.child_iter(node) {
-                Self::find_touched_nodes_with_handlers(tree, elements, widgets, event, child, x, y);
-            }
-        }
-    }
-
-    pub fn send_event_to_node(
-        elements: &Vec<Element>,
-        widgets: &mut Vec<Option<Box<dyn Widget>>>,
-        node: NodeHandle,
-        event: UIEvent,
-    ) {
-        if let Some(widget_index) = elements[node.0].widget {
-            let mut widget = widgets[widget_index].take();
-            if let Some(widget) = widget.as_mut() {
-                widget.event(event);
-            }
-            widgets[widget_index] = widget;
-        }
-    }
-
-    pub fn element_rectangle(&self, element: ElementHandle) -> Rectangle {
-        self.elements[element.0].rectangle
-    }
-
     pub fn pointer_position(&self) -> (f32, f32) {
         (self.pointer_x, self.pointer_y)
     }
@@ -333,23 +324,6 @@ impl UI {
 
     pub fn request_animation_frame(&mut self) {
         self.animation_frame_requested = true;
-    }
-
-    pub fn pointer_in_element(&self, element: ElementHandle) -> bool {
-        self.elements[element.0]
-            .rectangle
-            .contains(self.pointer_x, self.pointer_y)
-    }
-
-    /*
-    pub fn build(&mut self, widget: &mut impl Widget) {
-        let editor = self.edit();
-        widget.build(&editor);
-    }
-    */
-
-    pub fn log_tree(&self) {
-        println!("Nodes: {:?}", self.tree.nodes);
     }
 }
 
@@ -371,6 +345,7 @@ pub struct DrawingInfo {
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// A UIBuilder is used to construct UI and query the UI.
 #[derive(Clone)]
 pub struct UIBuilder<'a> {
     ui: Rc<RefCell<&'a mut UI>>,
@@ -379,7 +354,11 @@ pub struct UIBuilder<'a> {
 
 impl<'a> UIBuilder<'a> {
     pub fn add(&self, element_type: ElementType) -> Self {
-        let new_container = self.ui.borrow_mut().add(element_type, self.parent);
+        let new_container = self
+            .ui
+            .borrow_mut()
+            .current_ui_tree
+            .add(element_type, self.parent);
         UIBuilder {
             ui: self.ui.clone(),
             parent: Some(new_container),
@@ -504,19 +483,19 @@ impl<'a> UIBuilder<'a> {
     /// It must be paired with a call to "add_widget" to add it back to the tree.
     /// This will never deallocate an item for a ID, so if many unique IDs are
     /// produced memory will increase forever.
-    pub fn get_widget<T: Widget + 'static + Any>(&self, id: u64) -> Box<T> {
+    pub fn get_widget<T: 'static + Any>(&self, id: u64) -> Option<Box<T>> {
         let mut ui = self.ui.borrow_mut();
         if let Some(index) = ui.widget_id_to_index.get(&id).copied() {
             if let Some(widget) = ui.widgets[index].take() {
-                if let Ok(widget) = widget.into_any().downcast::<T>() {
-                    return widget;
+                if let Ok(widget) = widget.downcast::<T>() {
+                    return Some(widget);
                 }
             }
         }
-        Box::new(Widget::new())
+        None
     }
 
-    pub fn add_widget<T: Widget + 'static>(&self, id: u64, widget: Box<T>) -> usize {
+    pub fn add_widget<T: 'static>(&self, id: u64, widget: Box<T>) -> usize {
         let mut ui = self.ui.borrow_mut();
         if let Some(index) = ui.widget_id_to_index.get(&id).copied() {
             ui.widgets[index] = Some(widget);
@@ -529,8 +508,25 @@ impl<'a> UIBuilder<'a> {
         }
     }
 
-    /// Should accept widget handle instead
-    pub fn add_widget_event_handler(&self, element: ElementHandle, widget: usize) {
-        self.ui.borrow_mut().elements[element.0].widget = Some(widget);
+    pub fn pointer_position(&self) -> (f32, f32) {
+        let ui = self.ui.borrow();
+        (ui.pointer_x, ui.pointer_y)
     }
+
+    pub fn pointer_in_element(&self, element: ElementHandle) -> bool {
+        let ui = self.ui.borrow();
+        ui.old_ui_tree.elements[element.0]
+            .rectangle
+            .contains(ui.pointer_x, ui.pointer_y)
+    }
+
+    pub fn pointer_down(&self) -> bool {
+        self.ui.borrow().pointer_down
+    }
+
+    /*
+    pub fn add_widget_event_handler(&self, element: ElementHandle, widget: usize) {
+        self.ui.borrow_mut().old_ui_tree.elements[element.0].widget = Some(widget);
+    }
+    */
 }
