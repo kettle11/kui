@@ -1,15 +1,18 @@
 //! The render pass uses the sizes calculated in the layout pass to determine the positioning of all elements.
 //! A parent element makes available to the child a rectangle of space.
+use crate::drawing_info::*;
 use crate::rectangle::Rectangle;
 use crate::tree::{NodeHandle, Tree};
-use crate::ui::{Drawable, DrawingInfo, Element, ElementType, TextProperties};
+use crate::ui::{Element, ElementType, TextProperties, Widget};
 
+use std::any::Any;
 /// Render borrows things from the UI
 pub(crate) struct Render<'a> {
     pub(crate) fonts: &'a Vec<fontdue::Font>,
     pub(crate) tree: &'a Tree,
     pub(crate) elements: &'a mut Vec<Element>,
     pub(crate) drawing_info: &'a mut DrawingInfo,
+    pub(crate) widgets: &'a mut Vec<Option<Box<dyn Widget>>>,
 }
 
 impl<'a> Render<'a> {
@@ -21,19 +24,48 @@ impl<'a> Render<'a> {
     ) {
         let element = &self.elements[node.0];
         let element_rectangle = element.rectangle;
+        self.elements[node.0].rectangle = rectangle;
+        let element = &self.elements[node.0];
+
         match element.element_type {
             ElementType::Fit => {
+                let element_rectangle = Rectangle::new(
+                    rectangle.x,
+                    rectangle.y,
+                    element_rectangle.width,
+                    element_rectangle.height,
+                );
+                self.elements[node.0].rectangle = element_rectangle;
+
+                for child in self.tree.child_iter(node) {
+                    self.render_element(text_properties, element_rectangle, child);
+                }
+                return;
+            }
+            ElementType::Flexible => {
                 let element_rectangle = Rectangle::new(
                     rectangle.x,
                     rectangle.y,
                     element_rectangle.width.min(rectangle.width),
                     element_rectangle.height.min(rectangle.height),
                 );
+                self.elements[node.0].rectangle = element_rectangle;
+
                 for child in self.tree.child_iter(node) {
                     self.render_element(text_properties, element_rectangle, child);
                 }
-                self.elements[node.0].rectangle = element_rectangle;
                 return;
+            }
+            ElementType::ScrollbarVertical(content, view) => {
+                let content_height = self.elements[content.0].rectangle.height;
+                let view_height = self.elements[view.0].rectangle.height;
+                let height = (view_height / content_height) * view_height;
+
+                let rectangle = Rectangle::new(rectangle.x, rectangle.y, rectangle.width, height);
+
+                for child in self.tree.child_iter(node) {
+                    self.render_element(text_properties, rectangle, child);
+                }
             }
             ElementType::Row(spacing) => {
                 self.tree.child_iter(node).fold(
@@ -216,6 +248,17 @@ impl<'a> Render<'a> {
                     self.render_element(&text_properties, rectangle, child);
                 }
             }
+            ElementType::PositionVerticalPixels(pixels) => {
+                let rectangle = Rectangle::new(
+                    rectangle.x,
+                    rectangle.y + pixels,
+                    rectangle.width,
+                    rectangle.height,
+                );
+                for child in self.tree.child_iter(node) {
+                    self.render_element(&text_properties, rectangle, child);
+                }
+            }
             ElementType::Text(ref text) => {
                 if let Some(font) = text_properties.font {
                     let text_style = fontdue::layout::TextStyle {
@@ -270,8 +313,13 @@ impl<'a> Render<'a> {
                 for child in self.tree.child_iter(node) {
                     self.render_element(text_properties, rectangle, child);
                 }
-            } //     _ => unimplemented!("Unimplemented element: {:?}", element.element_type),
+            }
+            ElementType::CustomRender(handle) => {
+                let widget = self.widgets[handle.0].as_mut();
+                if let Some(widget) = widget {
+                    widget.draw(rectangle, self.drawing_info, self.elements);
+                }
+            }
         }
-        self.elements[node.0].rectangle = rectangle;
     }
 }

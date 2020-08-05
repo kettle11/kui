@@ -1,9 +1,3 @@
-use crate::ui::{ElementHandle, UIBuilder, UIEvent, UI};
-
-pub const COLOR_DEPRESSED: (f32, f32, f32, f32) = (0.3, 0.3, 0.3, 1.0);
-pub const DEFAULT_COLOR: (f32, f32, f32, f32) = (0.8, 0.8, 0.8, 1.0);
-pub const HOVER_COLOR: (f32, f32, f32, f32) = (0.7, 0.7, 0.7, 1.0);
-
 pub enum InterpolationCurve {
     Linear,
     /// Smoother step function from Wikipedia:

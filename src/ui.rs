@@ -1,11 +1,33 @@
 use fontdue;
 
+use crate::drawing_info::*;
 use crate::layout::Layout;
 use crate::rectangle::Rectangle;
 use crate::render::Render;
 use crate::texture::Texture;
 use crate::tree::{NodeHandle, Tree};
+
 use std::any::Any;
+
+pub trait Widget: ToAny {
+    fn draw(
+        &mut self,
+        rectangle: Rectangle,
+        drawing_info: &mut DrawingInfo,
+        elements: &Vec<Element>,
+    ) {
+    }
+}
+
+pub trait ToAny {
+    fn to_any(self: Box<Self>) -> Box<dyn Any>;
+}
+
+impl<T: Any + Widget> ToAny for T {
+    fn to_any(self: Box<Self>) -> Box<dyn Any> {
+        self
+    }
+}
 
 pub type ElementHandle = NodeHandle;
 
@@ -26,23 +48,6 @@ impl TextProperties {
             font: None,
         }
     }
-}
-
-pub struct EventContext<'a, 'b, T> {
-    pub data: &'b mut T,
-    pub event: UIEvent,
-    pub node: NodeHandle,
-    pub ui: &'a mut UI,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum UIEvent {
-    PointerMoved,
-    PointerDown,
-    PointerUp,
-    DoubleClick,
-    /// Contains delta time in milliseconds since last animation frame
-    AnimationFrame(f32),
 }
 
 #[derive(Debug)]
@@ -67,6 +72,8 @@ pub enum ElementType {
     PositionHorizontalPercentage(f32),
     /// Moves an element towards the horizontal end of the parent.
     PositionHorizontalPixels(f32),
+    /// Moves an element towards the vertical end of the parent.
+    PositionVerticalPixels(f32),
     /// Columns lay out multiple elements in a column.
     /// Accepts a single value for spacing between elements
     Column(f32),
@@ -86,6 +93,14 @@ pub enum ElementType {
     ExpanderVertical,
     /// Is the size of its children
     Fit,
+    /// Is the size of the children, but not bigger than parent space.
+    Flexible,
+    /// A bit of a hack to set an element's height to be based on the height of two elements
+    /// rendered previously
+    ScrollbarVertical(ElementHandle, ElementHandle),
+    /// Used in cases where custom rendering logic is needed that depends on a prior render pass
+    /// The usize passed can be used for the widget ID.
+    CustomRender(WidgetHandle),
 }
 
 pub struct Element {
@@ -152,9 +167,11 @@ pub struct UI {
     pointer_x: f32,
     pointer_y: f32,
     pointer_down: bool,
+    pointer_up: bool,
+    scroll_delta: f32,
     last_animation_timestamp: Option<std::time::Instant>,
     animation_frame_requested: bool,
-    widgets: Vec<Option<Box<dyn Any>>>,
+    widgets: Vec<Option<Box<dyn Widget>>>,
     widget_id_to_index: HashMap<u64, usize>,
 }
 
@@ -175,6 +192,8 @@ impl UI {
             pointer_x: 0.0,
             pointer_y: 0.0,
             pointer_down: false,
+            pointer_up: false,
+            scroll_delta: 0.,
             last_animation_timestamp: None,
             animation_frame_requested: false,
             widgets: Vec::new(),
@@ -199,16 +218,6 @@ impl UI {
             parent: Some(root),
         }
     }
-
-    /*
-
-    pub fn edit_element(&mut self, node: NodeHandle) -> UIBuilder<T> {
-        UIBuilder {
-            ui: Rc::new(RefCell::new(self)),
-            parent: Some(node),
-        }
-    }
-    */
 
     pub fn resize(&mut self, width: f32, height: f32) {
         self.width = width;
@@ -235,6 +244,7 @@ impl UI {
             tree: &self.current_ui_tree.tree,
             elements: &mut self.current_ui_tree.elements,
             drawing_info: &mut self.drawing_info,
+            widgets: &mut self.widgets,
         };
 
         render.render_element(
@@ -248,6 +258,8 @@ impl UI {
         self.drawing_info.canvas_height = self.height;
 
         self.pointer_down = false;
+        self.pointer_up = false;
+        self.scroll_delta = 0.;
 
         &self.drawing_info
     }
@@ -258,41 +270,22 @@ impl UI {
         // let old_y = self.pointer_y;
         self.pointer_x = x;
         self.pointer_y = y;
-        // widget.event(self, UIEvent::PointerMoved);
     }
 
     pub fn pointer_down(&mut self, x: f32, y: f32) {
         self.pointer_x = x;
         self.pointer_y = y;
         self.pointer_down = true;
-        /*
-        Self::find_touched_nodes_with_handlers(
-            &self.tree,
-            &self.elements,
-            &mut self.widgets,
-            UIEvent::PointerDown,
-            self.root,
-            x,
-            y,
-        );
-        */
     }
 
     pub fn pointer_up(&mut self, x: f32, y: f32) {
         self.pointer_x = x;
         self.pointer_y = y;
+        self.pointer_up = true;
+    }
 
-        /*
-        Self::find_touched_nodes_with_handlers(
-            &self.tree,
-            &self.elements,
-            &mut self.widgets,
-            UIEvent::PointerUp,
-            self.root,
-            x,
-            y,
-        );
-        */
+    pub fn scroll(&mut self, delta: f32) {
+        self.scroll_delta = delta;
     }
 
     /*
@@ -325,21 +318,6 @@ impl UI {
     pub fn request_animation_frame(&mut self) {
         self.animation_frame_requested = true;
     }
-}
-
-#[derive(Debug)]
-pub struct Drawable {
-    pub rectangle: (f32, f32, f32, f32),
-    pub texture_rectangle: (f32, f32, f32, f32),
-    pub color: (f32, f32, f32, f32),
-    pub radiuses: Option<(f32, f32, f32, f32)>,
-}
-
-pub struct DrawingInfo {
-    pub canvas_width: f32,
-    pub canvas_height: f32,
-    pub texture: crate::texture::Texture,
-    pub drawables: Vec<Drawable>,
 }
 
 use std::cell::RefCell;
@@ -467,8 +445,14 @@ impl<'a> UIBuilder<'a> {
         self.add(ElementType::Font(font))
     }
 
+    /// Fits to children but can grow larger than the parent.
     pub fn fit(&self) -> Self {
         self.add(ElementType::Fit)
+    }
+
+    /// Fits to children without growing larger than the parent.
+    pub fn flexible(&self) -> Self {
+        self.add(ElementType::Flexible)
     }
 
     pub fn position_horizontal_percentage(&self, percentage: f32) -> Self {
@@ -479,38 +463,56 @@ impl<'a> UIBuilder<'a> {
         self.add(ElementType::PositionHorizontalPixels(pixels))
     }
 
+    pub fn position_vertical_pixels(&self, pixels: f32) -> Self {
+        self.add(ElementType::PositionVerticalPixels(pixels))
+    }
+
+    pub fn scrollbar_vertical(&self, content: ElementHandle, view: ElementHandle) -> Self {
+        self.add(ElementType::ScrollbarVertical(content, view))
+    }
+
+    pub fn custom_draw(&self, widget_handle: WidgetHandle) -> Self {
+        self.add(ElementType::CustomRender(widget_handle))
+    }
+
     /// This gets an existing widget if cached with the right ID.
     /// It must be paired with a call to "add_widget" to add it back to the tree.
     /// This will never deallocate an item for a ID, so if many unique IDs are
     /// produced memory will increase forever.
-    pub fn get_widget<T: 'static + Any>(&self, id: u64) -> Option<Box<T>> {
+    pub fn get_widget<T: 'static + Any>(&self, id: u64) -> (WidgetHandle, Option<Box<T>>) {
         let mut ui = self.ui.borrow_mut();
         if let Some(index) = ui.widget_id_to_index.get(&id).copied() {
             if let Some(widget) = ui.widgets[index].take() {
-                if let Ok(widget) = widget.downcast::<T>() {
-                    return Some(widget);
+                if let Ok(widget) = widget.to_any().downcast::<T>() {
+                    return (WidgetHandle(index), Some(widget));
                 }
             }
         }
-        None
+        (WidgetHandle(ui.widgets.len()), None)
     }
 
-    pub fn add_widget<T: 'static>(&self, id: u64, widget: Box<T>) -> usize {
+    /// Adds a widget to the UI that is associated with an ID.
+    pub fn add_widget<T: 'static + Widget>(&self, id: u64, widget: Box<T>) -> WidgetHandle {
         let mut ui = self.ui.borrow_mut();
         if let Some(index) = ui.widget_id_to_index.get(&id).copied() {
             ui.widgets[index] = Some(widget);
-            index
+            WidgetHandle(index)
         } else {
             let index = ui.widgets.len();
             ui.widgets.push(Some(widget));
             ui.widget_id_to_index.insert(id, index);
-            index
+            WidgetHandle(index)
         }
     }
 
+    /// Code to query about input state.
     pub fn pointer_position(&self) -> (f32, f32) {
         let ui = self.ui.borrow();
         (ui.pointer_x, ui.pointer_y)
+    }
+
+    pub fn scroll_delta(&self) -> f32 {
+        self.ui.borrow().scroll_delta
     }
 
     pub fn pointer_in_element(&self, element: ElementHandle) -> bool {
@@ -524,9 +526,14 @@ impl<'a> UIBuilder<'a> {
         self.ui.borrow().pointer_down
     }
 
-    /*
-    pub fn add_widget_event_handler(&self, element: ElementHandle, widget: usize) {
-        self.ui.borrow_mut().old_ui_tree.elements[element.0].widget = Some(widget);
+    pub fn pointer_up(&self) -> bool {
+        self.ui.borrow().pointer_up
     }
-    */
+
+    pub fn element_rectangle(&self, element: ElementHandle) -> Rectangle {
+        self.ui.borrow().old_ui_tree.elements[element.0].rectangle
+    }
 }
+
+#[derive(Debug, Copy, Clone)]
+pub struct WidgetHandle(pub(crate) usize);

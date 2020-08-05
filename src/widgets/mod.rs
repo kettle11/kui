@@ -1,7 +1,11 @@
 mod button;
 mod interpolation;
+mod scroll_view;
 //mod slider;
 //mod vertical_divider;
+mod horizontal_divider;
 pub use button::*;
+pub use horizontal_divider::*;
+pub use scroll_view::*;
 //pub use slider::*;
 //pub use vertical_divider::*;

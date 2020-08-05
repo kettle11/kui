@@ -26,8 +26,17 @@ impl<'a> Layout<'a> {
     pub fn layout(&mut self, text_properties: &TextProperties, node: NodeHandle) -> (f32, f32) {
         let element = &self.elements[node.0];
         let size: (f32, f32) = match element.element_type {
-            ElementType::Fit => self.layout_children(&text_properties, node),
-
+            ElementType::Fit
+            | ElementType::CustomRender(..)
+            | ElementType::Flexible
+            | ElementType::Fill(..)
+            | ElementType::RoundedFill(..)
+            | ElementType::CenterVertical
+            | ElementType::PositionHorizontalPercentage(_)
+            | ElementType::PositionHorizontalPixels(_)
+            | ElementType::PositionVerticalPixels(_)
+            | ElementType::WidthPercentage(_)
+            | ElementType::ScrollbarVertical(..) => self.layout_children(text_properties, node),
             // A row walks through all summing up their widths and taking the max of their heights
             ElementType::Row(spacing) | ElementType::ReverseRow(spacing) => {
                 self.tree.child_iter(node).fold((0., 0.), |s, n| {
@@ -86,12 +95,7 @@ impl<'a> Layout<'a> {
                 let (width, _) = self.layout_children(text_properties, node);
                 (width, f32::MAX)
             }
-            ElementType::Fill(..)
-            | ElementType::RoundedFill(..)
-            | ElementType::CenterVertical
-            | ElementType::PositionHorizontalPercentage(_)
-            | ElementType::PositionHorizontalPixels(_)
-            | ElementType::WidthPercentage(_) => self.layout_children(text_properties, node),
+
             ElementType::Text(ref text) => {
                 if let Some(font) = text_properties.font {
                     let text_style = fontdue::layout::TextStyle {
