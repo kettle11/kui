@@ -5,13 +5,12 @@ use crate::rectangle::Rectangle;
 use crate::tree::{NodeHandle, Tree};
 use crate::ui::{Element, ElementType, TextProperties, Widget};
 
-use std::any::Any;
 /// Render borrows things from the UI
-pub(crate) struct Render<'a> {
+pub struct Render<'a> {
     pub(crate) fonts: &'a Vec<fontdue::Font>,
-    pub(crate) tree: &'a Tree,
-    pub(crate) elements: &'a mut Vec<Element>,
-    pub(crate) drawing_info: &'a mut DrawingInfo,
+    pub tree: &'a Tree,
+    pub elements: &'a mut Vec<Element>,
+    pub drawing_info: &'a mut DrawingInfo,
     pub(crate) widgets: &'a mut Vec<Option<Box<dyn Widget>>>,
 }
 
@@ -56,15 +55,19 @@ impl<'a> Render<'a> {
                 }
                 return;
             }
-            ElementType::ScrollbarVertical(content, view) => {
-                let content_height = self.elements[content.0].rectangle.height;
-                let view_height = self.elements[view.0].rectangle.height;
-                let height = (view_height / content_height) * view_height;
-
-                let rectangle = Rectangle::new(rectangle.x, rectangle.y, rectangle.width, height);
-
+            ElementType::ScaleToFit => {
                 for child in self.tree.child_iter(node) {
-                    self.render_element(text_properties, rectangle, child);
+                    let child_rectangle = self.elements[child.0].rectangle;
+                    let scale = (rectangle.width / child_rectangle.width)
+                        .min(rectangle.height / child_rectangle.height);
+
+                    let new_rectangle = Rectangle::new(
+                        rectangle.x,
+                        rectangle.y,
+                        child_rectangle.width * scale,
+                        child_rectangle.height * scale,
+                    );
+                    self.render_element(text_properties, new_rectangle, child);
                 }
             }
             ElementType::Row(spacing) => {
@@ -195,15 +198,40 @@ impl<'a> Render<'a> {
                     self.render_element(text_properties, rectangle, child);
                 }
             }
-            ElementType::CenterVertical => {
-                let center = rectangle.y + rectangle.height / 2.0;
-                for child in self.tree.child_iter(node) {
-                    let child_height = self.elements[child.0].rectangle.height;
 
-                    let y = center - child_height / 2.0;
+            ElementType::Center(horizontal, vertical) => {
+                let center_x = if horizontal {
+                    rectangle.x + rectangle.width / 2.0
+                } else {
+                    rectangle.x
+                };
+                let center_y = if vertical {
+                    rectangle.y + rectangle.height / 2.0
+                } else {
+                    rectangle.y
+                };
+
+                for child in self.tree.child_iter(node) {
+                    let child_width = self.elements[child.0].rectangle.width.min(rectangle.width);
+                    let child_height = self.elements[child.0]
+                        .rectangle
+                        .height
+                        .min(rectangle.height);
+
+                    let x = if horizontal {
+                        center_x - child_width / 2.0
+                    } else {
+                        rectangle.x
+                    };
+                    let y = if vertical {
+                        center_y - child_height / 2.0
+                    } else {
+                        rectangle.y
+                    };
+
                     self.render_element(
                         text_properties,
-                        Rectangle::new(rectangle.x, y, rectangle.width, rectangle.height),
+                        Rectangle::new(x, y, rectangle.width, rectangle.height),
                         child,
                     );
                 }
@@ -260,10 +288,16 @@ impl<'a> Render<'a> {
                 }
             }
             ElementType::Text(ref text) => {
+                // If no text size is specified fill the available space along the smaller dimension.
+                // Not implemented properly yet.
+                let text_size = text_properties
+                    .size
+                    .unwrap_or(rectangle.height.min(rectangle.width));
+
                 if let Some(font) = text_properties.font {
                     let text_style = fontdue::layout::TextStyle {
                         text: &text,
-                        px: text_properties.size,
+                        px: text_size,
                         font: &self.fonts[font.0],
                     };
 
@@ -284,29 +318,29 @@ impl<'a> Render<'a> {
                             c.height as u32,
                         );
 
-                        // Fontdue lays out relative to the upper left corner.
-                        // Fontdue's coordinate system is with 0, 0 in the lower left.
-                        let c_rectangle = (
-                            rectangle.x + c.x as f32,
-                            rectangle.y + -c.y - texture_rectangle.height as f32, // Why is this shifting like this?
-                            texture_rectangle.width as f32,
-                            texture_rectangle.height as f32,
-                        );
+                        // If the character cannot be packed (it is too large or there's not space) then don't render it
+                        if let Some(texture_rectangle) = texture_rectangle {
+                            self.drawing_info
+                                .characters
+                                .push((self.drawing_info.drawables.len(), c.key));
+                            // Fontdue lays out relative to the upper left corner.
+                            // Fontdue's coordinate system is with 0, 0 in the lower left.
+                            let c_rectangle = (
+                                rectangle.x + c.x as f32,
+                                rectangle.y + -c.y - texture_rectangle.height as f32, // Why is this shifting like this?
+                                texture_rectangle.width as f32,
+                                texture_rectangle.height as f32,
+                            );
 
-                        self.drawing_info.drawables.push(Drawable {
-                            texture_rectangle: (
-                                texture_rectangle.x as f32 / self.drawing_info.texture.width as f32,
-                                texture_rectangle.y as f32
-                                    / self.drawing_info.texture.height as f32,
-                                texture_rectangle.width as f32
-                                    / self.drawing_info.texture.width as f32,
-                                texture_rectangle.height as f32
-                                    / self.drawing_info.texture.height as f32,
-                            ),
-                            rectangle: c_rectangle,
-                            color: (1.0, 1.0, 1.0, 1.0),
-                            radiuses: None,
-                        })
+                            self.drawing_info.drawables.push(Drawable {
+                                texture_rectangle: (0., 0., 0., 0.), // This will be replaced later in the texture rectangle fixup step
+                                rectangle: c_rectangle,
+                                color: (1.0, 1.0, 1.0, 1.0),
+                                radiuses: None,
+                            })
+                        } else {
+                            println!("Text unrendered because texture atlas is full");
+                        }
                     }
                 }
 
@@ -315,10 +349,11 @@ impl<'a> Render<'a> {
                 }
             }
             ElementType::CustomRender(handle) => {
-                let widget = self.widgets[handle.0].as_mut();
-                if let Some(widget) = widget {
-                    widget.draw(rectangle, self.drawing_info, self.elements);
+                let mut widget = self.widgets[handle.0].take();
+                if let Some(widget) = widget.as_mut() {
+                    widget.draw(self, node, rectangle, text_properties);
                 }
+                self.widgets[handle.0] = widget;
             }
         }
     }

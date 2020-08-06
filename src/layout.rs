@@ -27,16 +27,16 @@ impl<'a> Layout<'a> {
         let element = &self.elements[node.0];
         let size: (f32, f32) = match element.element_type {
             ElementType::Fit
+            | ElementType::ScaleToFit
             | ElementType::CustomRender(..)
             | ElementType::Flexible
             | ElementType::Fill(..)
             | ElementType::RoundedFill(..)
-            | ElementType::CenterVertical
+            | ElementType::Center(..)
             | ElementType::PositionHorizontalPercentage(_)
             | ElementType::PositionHorizontalPixels(_)
             | ElementType::PositionVerticalPixels(_)
-            | ElementType::WidthPercentage(_)
-            | ElementType::ScrollbarVertical(..) => self.layout_children(text_properties, node),
+            | ElementType::WidthPercentage(_) => self.layout_children(text_properties, node),
             // A row walks through all summing up their widths and taking the max of their heights
             ElementType::Row(spacing) | ElementType::ReverseRow(spacing) => {
                 self.tree.child_iter(node).fold((0., 0.), |s, n| {
@@ -97,40 +97,49 @@ impl<'a> Layout<'a> {
             }
 
             ElementType::Text(ref text) => {
-                if let Some(font) = text_properties.font {
-                    let text_style = fontdue::layout::TextStyle {
-                        text: &text,
-                        px: text_properties.size,
-                        font: &self.fonts[font.0],
-                    };
+                if let Some(text_size) = text_properties.size {
+                    if let Some(font) = text_properties.font {
+                        let text_style = fontdue::layout::TextStyle {
+                            text: &text,
+                            px: text_size,
+                            font: &self.fonts[font.0],
+                        };
 
-                    let text_height = self.fonts[font.0]
-                        .horizontal_line_metrics(text_properties.size)
-                        .unwrap()
-                        .new_line_size;
-                    let layout_settings = fontdue::layout::LayoutSettings {
-                        ..fontdue::layout::LayoutSettings::default()
-                    };
+                        let text_height = self.fonts[font.0]
+                            .horizontal_line_metrics(text_size)
+                            .unwrap()
+                            .new_line_size;
+                        let layout_settings = fontdue::layout::LayoutSettings {
+                            ..fontdue::layout::LayoutSettings::default()
+                        };
 
-                    let mut layout = Vec::new();
-                    fontdue::layout::layout_horizontal(&text_style, &layout_settings, &mut layout);
+                        let mut layout = Vec::new();
+                        fontdue::layout::layout_horizontal(
+                            &text_style,
+                            &layout_settings,
+                            &mut layout,
+                        );
 
-                    if let Some(c) = layout.get(0) {
-                        let rectangle = Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
-                        let total_rectangle = layout.iter().fold(rectangle, |r, c| {
-                            //    println!("c: {:?}", c);
-
-                            let c_rectangle =
+                        if let Some(c) = layout.get(0) {
+                            let rectangle =
                                 Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
-                            r.join(c_rectangle)
-                        });
+                            let total_rectangle = layout.iter().fold(rectangle, |r, c| {
+                                //    println!("c: {:?}", c);
 
-                        (total_rectangle.width + rectangle.x, text_height)
+                                let c_rectangle =
+                                    Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
+                                r.join(c_rectangle)
+                            });
+
+                            (total_rectangle.width + rectangle.x, text_height)
+                        } else {
+                            (0., 0.)
+                        }
                     } else {
                         (0., 0.)
                     }
                 } else {
-                    (0., 0.)
+                    (10000., 10000.) // arbitrarily big number
                 }
             }
         };

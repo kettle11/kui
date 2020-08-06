@@ -23,7 +23,7 @@ impl Button {
     }
 
     /// Returns true if pressed
-    fn build(&mut self, parent: &UIBuilder, text: &'static str) -> bool {
+    fn build(&mut self, parent: &UIBuilder, text: &str) -> bool {
         // Input
         let mut pressed = false;
         let mut pointer_in_element = false;
@@ -44,17 +44,6 @@ impl Button {
 
         let depressed = self.pointer_held_down && pointer_in_element;
 
-        // Animation
-        /*
-        let animation_speed = 100.;
-
-        if self.pointer_inside {
-            self.hover_animate.add(delta / animation_speed);
-        } else {
-            self.hover_animate.subtract(delta / animation_speed);
-        }
-        */
-
         // Rendering
         let color = if depressed {
             COLOR_DEPRESSED
@@ -63,7 +52,9 @@ impl Button {
         };
 
         let top = parent.fit();
-        top.rounded_fill(color, 15.)
+        top.fill(color)
+            .padding(2.)
+            .fill((0., 0., 0., 1.))
             .padding(20.)
             .center_vertical()
             .text(text);
@@ -73,7 +64,8 @@ impl Button {
 }
 
 impl Widget for Button {}
-pub fn button(parent: &UIBuilder, id: u64, text: &'static str) -> bool {
+
+pub fn button(parent: &UIBuilder, id: u64, text: &str) -> bool {
     // Create or get an existing button.
     let mut button = parent.get_widget(id).1.unwrap_or(Box::new(Button::new()));
     let pressed = button.build(parent, text);

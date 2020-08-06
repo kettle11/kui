@@ -12,9 +12,10 @@ use std::any::Any;
 pub trait Widget: ToAny {
     fn draw(
         &mut self,
-        rectangle: Rectangle,
-        drawing_info: &mut DrawingInfo,
-        elements: &Vec<Element>,
+        _context: &mut Render,
+        _element: ElementHandle,
+        _rectangle: Rectangle,
+        _text_properties: &TextProperties,
     ) {
     }
 }
@@ -34,9 +35,9 @@ pub type ElementHandle = NodeHandle;
 #[derive(Copy, Clone, Debug)]
 pub struct FontHandle(pub(crate) usize);
 
-pub(crate) struct TextProperties {
-    pub(crate) size: f32,
-    pub(crate) font: Option<FontHandle>,
+pub struct TextProperties {
+    pub size: Option<f32>,
+    pub font: Option<FontHandle>,
 }
 
 impl TextProperties {
@@ -44,7 +45,7 @@ impl TextProperties {
         Self {
             // 17 * 2. When DPI scaling is added change this to 17.
             // 17 is the recommended size for buttons on iOS, so a bit arbitrary.
-            size: 34.,
+            size: Some(34.),
             font: None,
         }
     }
@@ -80,11 +81,12 @@ pub enum ElementType {
     /// Unstyled text
     Text(String),
     /// Specify text size for dependent elements,
-    TextSize(f32),
+    /// If text size is none then the text will slace to fit the space
+    TextSize(Option<f32>),
     /// Specifies font to use for children. Defaults to 'None'.
     Font(FontHandle),
-    /// Centers children vertically in available space
-    CenterVertical,
+    /// Centers children horizontally and vertically in available space.
+    Center(bool, bool),
     /// Always takes up maximum available space
     Expander,
     /// Takes up all horizontal space
@@ -95,9 +97,8 @@ pub enum ElementType {
     Fit,
     /// Is the size of the children, but not bigger than parent space.
     Flexible,
-    /// A bit of a hack to set an element's height to be based on the height of two elements
-    /// rendered previously
-    ScrollbarVertical(ElementHandle, ElementHandle),
+    /// Preserve aspect ratio but scale to fit as much of the parent as possible without overflowing.
+    ScaleToFit,
     /// Used in cases where custom rendering logic is needed that depends on a prior render pass
     /// The usize passed can be used for the widget ID.
     CustomRender(WidgetHandle),
@@ -186,7 +187,8 @@ impl UI {
                 canvas_width: 0.0,
                 canvas_height: 0.0,
                 drawables: Vec::new(),
-                texture: Texture::new(512),
+                texture: Texture::new(2048),
+                characters: Vec::new(),
             },
             fonts: Vec::new(),
             pointer_x: 0.0,
@@ -225,6 +227,9 @@ impl UI {
     }
 
     pub fn render(&mut self) -> &DrawingInfo {
+        // Prepare the texture atlas for the new frame
+        self.drawing_info.texture.new_frame();
+
         // First layout the elements.
         // Calculate the sizes for various elements.
         let mut layout = Layout {
@@ -237,6 +242,7 @@ impl UI {
         layout.layout(&text_properties, self.current_ui_tree.root);
 
         self.drawing_info.drawables.clear();
+        self.drawing_info.characters.clear();
 
         // Then render the final outputs based on the previously calculated sizes.
         let mut render = Render {
@@ -261,6 +267,8 @@ impl UI {
         self.pointer_up = false;
         self.scroll_delta = 0.;
 
+        // self.drawing_info.texture.repack();
+        self.drawing_info.fix_character_rectangles();
         &self.drawing_info
     }
 
@@ -429,8 +437,16 @@ impl<'a> UIBuilder<'a> {
         ))
     }
 
+    pub fn center(&self) -> Self {
+        self.add(ElementType::Center(true, true))
+    }
+
+    pub fn center_horizontal(&self) -> Self {
+        self.add(ElementType::Center(true, false))
+    }
+
     pub fn center_vertical(&self) -> Self {
-        self.add(ElementType::CenterVertical)
+        self.add(ElementType::Center(false, true))
     }
 
     pub fn text(&self, text: &str) -> Self {
@@ -438,7 +454,11 @@ impl<'a> UIBuilder<'a> {
     }
 
     pub fn text_size(&self, size: f32) -> Self {
-        self.add(ElementType::TextSize(size))
+        self.add(ElementType::TextSize(Some(size)))
+    }
+
+    pub fn clear_text_size(&self) -> Self {
+        self.add(ElementType::TextSize(None))
     }
 
     pub fn font(&self, font: FontHandle) -> Self {
@@ -467,8 +487,8 @@ impl<'a> UIBuilder<'a> {
         self.add(ElementType::PositionVerticalPixels(pixels))
     }
 
-    pub fn scrollbar_vertical(&self, content: ElementHandle, view: ElementHandle) -> Self {
-        self.add(ElementType::ScrollbarVertical(content, view))
+    pub fn scale_to_fit(&self) -> Self {
+        self.add(ElementType::ScaleToFit)
     }
 
     pub fn custom_draw(&self, widget_handle: WidgetHandle) -> Self {

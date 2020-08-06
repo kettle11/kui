@@ -7,6 +7,7 @@ mod tree;
 mod ui;
 pub mod widgets;
 pub use drawing_info::{Drawable, DrawingInfo};
+pub use render::Render;
 pub use ui::*;
 
 #[macro_export]

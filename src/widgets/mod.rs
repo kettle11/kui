@@ -1,11 +1,12 @@
 mod button;
+mod drag;
 mod interpolation;
 mod scroll_view;
 //mod slider;
-//mod vertical_divider;
 mod horizontal_divider;
+mod vertical_divider;
 pub use button::*;
 pub use horizontal_divider::*;
 pub use scroll_view::*;
 //pub use slider::*;
-//pub use vertical_divider::*;
+pub use vertical_divider::*;

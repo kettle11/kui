@@ -7,6 +7,7 @@ struct RenderData {
     vertex_buffer: <Context as HasContext>::Buffer,
     element_buffer: <Context as HasContext>::Buffer,
     texture_atlas_uniform: Option<<Context as HasContext>::UniformLocation>,
+    texture: <Context as HasContext>::Texture,
 }
 pub struct GLDrawer {
     render_data: RenderData,
@@ -106,12 +107,21 @@ impl GLDrawer {
             let element_buffer = gl.create_buffer().unwrap();
             gl.bind_buffer(ELEMENT_ARRAY_BUFFER, Some(element_buffer));
 
+            let texture = gl.create_texture().unwrap();
+            gl.bind_texture(TEXTURE_2D, Some(texture));
+            gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_WRAP_S, REPEAT as i32); // set texture wrapping to GL_REPEAT (default wrapping method)
+            gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_WRAP_T, REPEAT as i32);
+            // set texture filtering parameters
+            gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_MIN_FILTER, LINEAR as i32);
+            gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_MAG_FILTER, LINEAR as i32);
+
             let render_data = RenderData {
                 program,
                 vertex_array_object,
                 vertex_buffer,
                 element_buffer,
                 texture_atlas_uniform,
+                texture,
             };
             panic_if_error(gl);
 
@@ -330,13 +340,7 @@ impl GLDrawer {
             gl.blend_func(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 
             // Setup the texture here.
-            let texture = gl.create_texture().unwrap();
-            gl.bind_texture(TEXTURE_2D, Some(texture));
-            gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_WRAP_S, REPEAT as i32); // set texture wrapping to GL_REPEAT (default wrapping method)
-            gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_WRAP_T, REPEAT as i32);
-            // set texture filtering parameters
-            gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_MIN_FILTER, LINEAR as i32);
-            gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_MAG_FILTER, LINEAR as i32);
+            gl.bind_texture(TEXTURE_2D, Some(self.render_data.texture));
 
             gl.tex_image_2d(
                 TEXTURE_2D,
@@ -362,7 +366,7 @@ impl GLDrawer {
             gl.active_texture(TEXTURE0);
             panic_if_error(gl);
 
-            gl.bind_texture(TEXTURE_2D, Some(texture));
+            gl.bind_texture(TEXTURE_2D, Some(self.render_data.texture));
             panic_if_error(gl);
 
             // Bind the uniform to the first slot.
