@@ -14,20 +14,26 @@ impl<'a> Layout<'a> {
     /// Lays out children and returns their total width and height.
     fn layout_children(
         &mut self,
+        parent_size: (f32, f32),
         text_properties: &TextProperties,
         node: NodeHandle,
     ) -> (f32, f32) {
         self.tree.child_iter(node).fold((0., 0.), |s, n| {
-            let (child_width, child_height) = self.layout(&text_properties, n);
+            let (child_width, child_height) = self.layout(parent_size, &text_properties, n);
             (s.0.max(child_width), s.1.max(child_height))
         })
     }
 
-    pub fn layout(&mut self, text_properties: &TextProperties, node: NodeHandle) -> (f32, f32) {
+    pub fn layout(
+        &mut self,
+        parent_size: (f32, f32),
+        text_properties: &TextProperties,
+        node: NodeHandle,
+    ) -> (f32, f32) {
         let element = &self.elements[node.0];
+
         let size: (f32, f32) = match element.element_type {
             ElementType::Fit
-            | ElementType::ScaleToFit
             | ElementType::CustomRender(..)
             | ElementType::Flexible
             | ElementType::Fill(..)
@@ -35,25 +41,37 @@ impl<'a> Layout<'a> {
             | ElementType::Center(..)
             | ElementType::PositionHorizontalPercentage(_)
             | ElementType::PositionHorizontalPixels(_)
-            | ElementType::PositionVerticalPixels(_)
-            | ElementType::WidthPercentage(_) => self.layout_children(text_properties, node),
+            | ElementType::PositionVerticalPixels(_) => {
+                self.layout_children(parent_size, text_properties, node)
+            }
+            ElementType::WidthPercentage(percentage) => {
+                let parent_size = (parent_size.0 * percentage, parent_size.1);
+                self.layout_children(parent_size, text_properties, node)
+            }
+            ElementType::ScaleToFit => {
+                let (children_width, children_height): (f32, f32) =
+                    self.layout_children(parent_size, &text_properties, node);
+
+                let scale = (parent_size.0 / children_width).min(parent_size.1 / children_height);
+                (children_width * scale, children_height * scale)
+            }
             // A row walks through all summing up their widths and taking the max of their heights
             ElementType::Row(spacing) | ElementType::ReverseRow(spacing) => {
                 self.tree.child_iter(node).fold((0., 0.), |s, n| {
-                    let (child_width, child_height) = self.layout(text_properties, n);
+                    let (child_width, child_height) = self.layout(parent_size, text_properties, n);
                     (s.0 + child_width + spacing, s.1.max(child_height))
                 })
             }
             // A row walks through all summing up their widths and taking the max of their heights
             ElementType::Column(spacing) => self.tree.child_iter(node).fold((0., 0.), |s, n| {
-                let (child_width, child_height) = self.layout(text_properties, n);
+                let (child_width, child_height) = self.layout(parent_size, text_properties, n);
                 (s.0.max(child_width), s.1 + child_height + spacing)
             }),
             ElementType::Padding(padding_width, padding_height) => {
                 // Padding ensures that the space is requested is at least padding.
                 // Probably padding shouldn't have to walk the tree and should just assume one child.
                 let (children_width, children_height): (f32, f32) =
-                    self.layout_children(&text_properties, node);
+                    self.layout_children(parent_size, &text_properties, node);
 
                 (
                     children_width + padding_width * 2.,
@@ -62,11 +80,15 @@ impl<'a> Layout<'a> {
             }
             // The following elements do not rearrange children.
             ElementType::Width(width) => {
-                let children_height: f32 = self.layout_children(&text_properties, node).1;
+                let children_height: f32 = self
+                    .layout_children((width, parent_size.1), &text_properties, node)
+                    .1;
                 (width, children_height)
             }
             ElementType::Height(height) => {
-                let children_width: f32 = self.layout_children(&text_properties, node).0;
+                let children_width: f32 = self
+                    .layout_children((parent_size.0, height), &text_properties, node)
+                    .0;
                 (children_width, height)
             }
             ElementType::TextSize(size) => {
@@ -74,72 +96,64 @@ impl<'a> Layout<'a> {
                     size,
                     font: text_properties.font,
                 };
-                self.layout_children(&text_properties, node)
+                self.layout_children(parent_size, &text_properties, node)
             }
             ElementType::Font(font) => {
                 let text_properties = TextProperties {
                     size: text_properties.size,
                     font: Some(font),
                 };
-                self.layout_children(&text_properties, node)
+                self.layout_children(parent_size, &text_properties, node)
             }
             ElementType::Expander => {
-                self.layout_children(text_properties, node);
-                (f32::MAX, f32::MAX)
+                self.layout_children(parent_size, text_properties, node);
+                parent_size
             }
             ElementType::ExpanderHorizontal => {
-                let (_, height) = self.layout_children(text_properties, node);
-                (f32::MAX, height)
+                let (_, height) = self.layout_children(parent_size, text_properties, node);
+                (parent_size.0, height)
             }
             ElementType::ExpanderVertical => {
-                let (width, _) = self.layout_children(text_properties, node);
-                (width, f32::MAX)
+                let (width, _) = self.layout_children(parent_size, text_properties, node);
+                (width, parent_size.1)
             }
 
             ElementType::Text(ref text) => {
-                if let Some(text_size) = text_properties.size {
-                    if let Some(font) = text_properties.font {
-                        let text_style = fontdue::layout::TextStyle {
-                            text: &text,
-                            px: text_size,
-                            font: &self.fonts[font.0],
-                        };
+                // Choose an arbitrary size if known is specified.
+                let text_size = text_properties.size.unwrap_or(100.);
+                if let Some(font) = text_properties.font {
+                    let text_style = fontdue::layout::TextStyle {
+                        text: &text,
+                        px: text_size,
+                        font: &self.fonts[font.0],
+                    };
 
-                        let text_height = self.fonts[font.0]
-                            .horizontal_line_metrics(text_size)
-                            .unwrap()
-                            .new_line_size;
-                        let layout_settings = fontdue::layout::LayoutSettings {
-                            ..fontdue::layout::LayoutSettings::default()
-                        };
+                    // Should this be used if a text size is specified?
+                    let text_height = self.fonts[font.0]
+                        .horizontal_line_metrics(text_size)
+                        .unwrap()
+                        .new_line_size;
+                    let layout_settings = fontdue::layout::LayoutSettings {
+                        ..fontdue::layout::LayoutSettings::default()
+                    };
 
-                        let mut layout = Vec::new();
-                        fontdue::layout::layout_horizontal(
-                            &text_style,
-                            &layout_settings,
-                            &mut layout,
-                        );
+                    let mut layout = Vec::new();
+                    fontdue::layout::layout_horizontal(&text_style, &layout_settings, &mut layout);
 
-                        if let Some(c) = layout.get(0) {
-                            let rectangle =
+                    if let Some(c) = layout.get(0) {
+                        let rectangle = Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
+                        let total_rectangle = layout.iter().fold(rectangle, |r, c| {
+                            let c_rectangle =
                                 Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
-                            let total_rectangle = layout.iter().fold(rectangle, |r, c| {
-                                //    println!("c: {:?}", c);
+                            r.join(c_rectangle)
+                        });
 
-                                let c_rectangle =
-                                    Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
-                                r.join(c_rectangle)
-                            });
-
-                            (total_rectangle.width + rectangle.x, text_height)
-                        } else {
-                            (0., 0.)
-                        }
+                        (total_rectangle.width + rectangle.x, total_rectangle.height)
                     } else {
                         (0., 0.)
                     }
                 } else {
-                    (10000., 10000.) // arbitrarily big number
+                    (0., 0.)
                 }
             }
         };

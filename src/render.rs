@@ -57,17 +57,18 @@ impl<'a> Render<'a> {
             }
             ElementType::ScaleToFit => {
                 for child in self.tree.child_iter(node) {
-                    let child_rectangle = self.elements[child.0].rectangle;
-                    let scale = (rectangle.width / child_rectangle.width)
-                        .min(rectangle.height / child_rectangle.height);
+                    let child_rect = self.elements[child.0].rectangle;
+                    let scale = (rectangle.width / child_rect.width)
+                        .min(rectangle.height / child_rect.height);
 
-                    let new_rectangle = Rectangle::new(
+                    let child_rectangle = Rectangle::new(
                         rectangle.x,
                         rectangle.y,
-                        child_rectangle.width * scale,
-                        child_rectangle.height * scale,
+                        scale * child_rect.width,
+                        scale * child_rect.height,
                     );
-                    self.render_element(text_properties, new_rectangle, child);
+
+                    self.render_element(text_properties, child_rectangle, child);
                 }
             }
             ElementType::Row(spacing) => {
@@ -212,12 +213,8 @@ impl<'a> Render<'a> {
                 };
 
                 for child in self.tree.child_iter(node) {
-                    let child_width = self.elements[child.0].rectangle.width.min(rectangle.width);
-                    let child_height = self.elements[child.0]
-                        .rectangle
-                        .height
-                        .min(rectangle.height);
-
+                    let child_width = self.elements[child.0].rectangle.width;
+                    let child_height = self.elements[child.0].rectangle.height;
                     let x = if horizontal {
                         center_x - child_width / 2.0
                     } else {
@@ -288,11 +285,12 @@ impl<'a> Render<'a> {
                 }
             }
             ElementType::Text(ref text) => {
-                // If no text size is specified fill the available space along the smaller dimension.
-                // Not implemented properly yet.
-                let text_size = text_properties
-                    .size
-                    .unwrap_or(rectangle.height.min(rectangle.width));
+                // If no size is specified then scale the text to fit within the available space.
+                let text_size = text_properties.size.unwrap_or({
+                    let scale = (rectangle.width / element_rectangle.width)
+                        .min(rectangle.height / element_rectangle.height);
+                    scale * 100.
+                });
 
                 if let Some(font) = text_properties.font {
                     let text_style = fontdue::layout::TextStyle {
@@ -327,11 +325,18 @@ impl<'a> Render<'a> {
                             // Fontdue's coordinate system is with 0, 0 in the lower left.
                             let c_rectangle = (
                                 rectangle.x + c.x as f32,
-                                rectangle.y + -c.y - texture_rectangle.height as f32, // Why is this shifting like this?
+                                rectangle.y, // Why is this shifting like this?
                                 texture_rectangle.width as f32,
                                 texture_rectangle.height as f32,
                             );
 
+                            /*
+                            self.drawing_info.drawables.push(Drawable {
+                                texture_rectangle: (0., 0., 0., 0.), // This will be replaced later in the texture rectangle fixup step
+                                rectangle: c_rectangle,
+                                color: (1.0, 0.0, 0.0, 1.0),
+                                radiuses: None,
+                            });*/
                             self.drawing_info.drawables.push(Drawable {
                                 texture_rectangle: (0., 0., 0., 0.), // This will be replaced later in the texture rectangle fixup step
                                 rectangle: c_rectangle,

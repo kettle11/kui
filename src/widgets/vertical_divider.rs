@@ -9,10 +9,10 @@ pub struct VerticalDivider {
 }
 
 impl VerticalDivider {
-    fn new() -> Self {
+    fn new(initial_first_section_width: f32) -> Self {
         Self {
-            first_section_width: 400.,
-            drag: Drag::new((400., 0.)),
+            first_section_width: initial_first_section_width,
+            drag: Drag::new((initial_first_section_width, 0.)),
         }
     }
 
@@ -38,11 +38,15 @@ impl VerticalDivider {
 impl Widget for VerticalDivider {}
 
 /// Returns the two sections divided by the divider
-pub fn vertical_divider<'a>(parent: &UIBuilder<'a>, id: u64) -> (UIBuilder<'a>, UIBuilder<'a>) {
+pub fn vertical_divider<'a>(
+    parent: &UIBuilder<'a>,
+    id: u64,
+    initial_first_section_width: f32,
+) -> (UIBuilder<'a>, UIBuilder<'a>) {
     let mut item = parent
         .get_widget(id)
         .1
-        .unwrap_or(Box::new(VerticalDivider::new()));
+        .unwrap_or(Box::new(VerticalDivider::new(initial_first_section_width)));
     let sections = item.build(parent);
     parent.add_widget(id, item);
     sections

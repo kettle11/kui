@@ -239,7 +239,11 @@ impl UI {
         };
         let text_properties = TextProperties::new();
 
-        layout.layout(&text_properties, self.current_ui_tree.root);
+        layout.layout(
+            (self.width, self.height),
+            &text_properties,
+            self.current_ui_tree.root,
+        );
 
         self.drawing_info.drawables.clear();
         self.drawing_info.characters.clear();
