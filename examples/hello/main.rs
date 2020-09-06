@@ -6,12 +6,13 @@ use kui::*;
 mod gl_drawer;
 fn main() {
     let (app, event_loop) = initialize();
-    let mut window_width = 800;
+    let mut window_width = 1200;
     let mut window_height = 800;
     let window = app
         .new_window()
-        .title("Mail")
-        .dimensions(window_width, window_height)
+        //  .without_titlebar()
+        .title("Hello")
+        .size(window_width, window_height)
         .build()
         .unwrap();
     println!("Hello, world!");
@@ -20,6 +21,8 @@ fn main() {
     let mut gl_context = GLContext::new().samples(4).build().unwrap();
     gl_context.set_window(Some(&window)).unwrap();
 
+    // gl_context.set_vsync(VSync::Adaptive);
+
     #[cfg(target_arch = "wasm32")]
     let gl = glow::Context::from_webgl2_context(gl_context.webgl2_context().unwrap());
     #[cfg(not(target_arch = "wasm32"))]
@@ -27,95 +30,21 @@ fn main() {
 
     unsafe {
         // gl.enable(SCISSOR_TEST);
-        gl.viewport(0, 0, 800, 800);
+        gl.viewport(0, 0, window_width as i32, window_height as i32);
     }
 
     let mut ui = UI::new();
     let inter_medium = ui.font_from_bytes(include_bytes!("../../resources/Inter-Medium.ttf")); //&std::fs::read("resources/Inter-Medium.ttf").unwrap());
-    let material_icons =
-        ui.font_from_bytes(include_bytes!("../../resources/MaterialIcons-Regular.ttf")); //&std::fs::read("resources/MaterialIcons-Regular.ttf").unwrap());
+                                                                                               /*let material_icons =
+                                                                                               ui.font_from_bytes(include_bytes!("../../resources/MaterialIcons-Regular.ttf")); //&std::fs::read("resources/MaterialIcons-Regular.ttf").unwrap());
+                                                                                               */
     ui.resize(window_width as f32, window_height as f32);
 
     const GRAY: (f32, f32, f32, f32) = (0.6, 0.6, 0.6, 1.0);
 
-    struct MainView {
-        font: FontHandle,
-        vertical_divider: VerticalDivider<Button, Slider>, // button: Button,
-                                                           // slider: Slider,
-                                                           // element: Option<ElementHandle>
-    }
-
-    let mut main_view = MainView {
-        font: inter_medium,
-        //   button: Button::new("Click me"),
-        //   slider: Slider::new(),
-        //   element: None,
-        vertical_divider: VerticalDivider::new(Button::new("Button A"), Slider::new(), 400.),
-    };
-
-    impl Widget for MainView {
-        fn build(&mut self, parent: &UIBuilder) {
-            let top = parent.font(self.font);
-            self.vertical_divider.build(&top);
-            /*
-            let top = parent
-                .font(self.font)
-                .height(200.)
-                .expander()
-                .fill(GRAY)
-                .spaced_row(20.);
-
-            top.width(0.); // For spacing
-            self.button.build(&top.center_vertical());
-            self.slider.build(&top.center_vertical());
-            // self.element = Some(top.handle());
-            top.width(0.); // For spacing
-            */
-        }
-
-        fn event(&mut self, ui: &mut UI, event: UIEvent) {
-            self.vertical_divider.event(ui, event);
-            /*
-            self.button.event(ui, event);
-            self.slider.event(ui, event);
-            */
-        }
-    }
-
-    struct ToolBar<T: Widget> {
-        children: Vec<T>,
-        element: Option<ElementHandle>,
-    }
-
-    impl<T: Widget> ToolBar<T> {
-        pub fn new(children: Vec<T>) -> Self {
-            Self {
-                children,
-                element: None,
-            }
-        }
-    }
-
-    impl<T: Widget> Widget for ToolBar<T> {
-        fn build(&mut self, parent: &UIBuilder) {
-            let top = parent.height(100.).expander().fill(GRAY).row();
-            for child in &mut self.children {
-                child.build(&top);
-            }
-            self.element = Some(top.handle());
-        }
-
-        fn event(&mut self, ui: &mut UI, event: UIEvent) {
-            for child in &mut self.children {
-                child.event(ui, event);
-            }
-        }
-    }
-
-    ui.build(&mut main_view);
-
     let mut gl_drawer = gl_drawer::GLDrawer::new(&gl);
 
+    let mut letter = "A".to_string();
     event_loop.run(move |event| match event {
         Event::WindowCloseRequested { .. } => app.quit(),
         Event::WindowResized { width, height, .. } => {
@@ -129,27 +58,67 @@ fn main() {
             ui.resize(width as f32, height as f32);
             window.request_redraw();
         }
-        Event::MouseMoved { x, y, .. } => {
-            ui.pointer_move(&mut main_view, x, y);
+        Event::PointerMoved { x, y, .. } => {
+            ui.pointer_move(x as f32, y as f32);
             window.request_redraw();
         }
-        Event::MouseButtonDown { x, y, .. } => {
-            ui.pointer_down(&mut main_view, x, y);
+        Event::PointerDown { x, y, .. } => {
+            ui.pointer_down(x as f32, y as f32);
             window.request_redraw();
         }
-        Event::MouseButtonUp { x, y, .. } => {
-            ui.pointer_up(&mut main_view, x, y);
+        Event::PointerUp { x, y, .. } => {
+            ui.pointer_up(x as f32, y as f32);
+            window.request_redraw();
+        }
+        Event::Scroll { delta_y, .. } => {
+            ui.scroll(delta_y as f32);
             window.request_redraw();
         }
         Event::Draw { .. } => unsafe {
+            // ----------- Build UI ---------------
+            let body = ui.edit().font(inter_medium).fill((0., 0., 0., 1.));
+
+            let (first_section, second_section) = vertical_divider(&body, id!(), 600.);
+
+            first_section
+                .center()
+                .scale_to_fit()
+                .padding(50.)
+                .text_size(500.)
+                .text(&letter);
+
+            let scroll = scroll_view(&second_section, id!());
+            let scroll = scroll.flexible().text_size(40.).spaced_column(20.);
+
+            for (i, c) in "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().enumerate() {
+                if button(
+                    &scroll.center_horizontal(),
+                    id!() + i as u64,
+                    &c.to_string(),
+                ) {
+                    letter = c.to_string();
+                    window.request_redraw();
+                }
+            }
+
+            /*
+            let body = ui.edit().font(inter_medium);
+            let toolbar = body.height(200.).horizontal_expander().spaced_row(30.);
+            if button(&toolbar, id!(), "Add Cube") {
+                println!("Added a cube");
+            }
+            if button(&toolbar, id!(), "Add Sphere") {
+                println!("Added a sphere");
+            }*/
+
+            // ----------- End Build UI ---------------
+
             gl.clear_color(0.945, 0.945, 0.945, 1.0);
             gl.disable(CULL_FACE);
             gl.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
 
-            ui.animate(&mut main_view);
-
-            ui.build(&mut main_view);
             let drawables = ui.render();
+
             gl_drawer.draw(&gl, &drawables);
 
             if ui.needs_redraw() {

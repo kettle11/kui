@@ -36,7 +36,7 @@ pub type ElementHandle = NodeHandle;
 pub struct FontHandle(pub(crate) usize);
 
 pub struct TextProperties {
-    pub size: Option<f32>,
+    pub size: f32,
     pub font: Option<FontHandle>,
 }
 
@@ -45,7 +45,7 @@ impl TextProperties {
         Self {
             // 17 * 2. When DPI scaling is added change this to 17.
             // 17 is the recommended size for buttons on iOS, so a bit arbitrary.
-            size: Some(34.),
+            size: 34.,
             font: None,
         }
     }
@@ -82,7 +82,7 @@ pub enum ElementType {
     Text(String),
     /// Specify text size for dependent elements,
     /// If text size is none then the text will slace to fit the space
-    TextSize(Option<f32>),
+    TextSize(f32),
     /// Specifies font to use for children. Defaults to 'None'.
     Font(FontHandle),
     /// Centers children horizontally and vertically in available space.
@@ -458,11 +458,7 @@ impl<'a> UIBuilder<'a> {
     }
 
     pub fn text_size(&self, size: f32) -> Self {
-        self.add(ElementType::TextSize(Some(size)))
-    }
-
-    pub fn clear_text_size(&self) -> Self {
-        self.add(ElementType::TextSize(None))
+        self.add(ElementType::TextSize(size))
     }
 
     pub fn font(&self, font: FontHandle) -> Self {

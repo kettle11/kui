@@ -120,12 +120,13 @@ impl<'a> Layout<'a> {
 
             ElementType::Text(ref text) => {
                 // Choose an arbitrary size if known is specified.
-                let text_size = text_properties.size.unwrap_or(100.);
+                let text_size = text_properties.size;
                 if let Some(font) = text_properties.font {
+                    let fonts = [&self.fonts[font.0]];
                     let text_style = fontdue::layout::TextStyle {
                         text: &text,
                         px: text_size,
-                        font: &self.fonts[font.0],
+                        font_index: 0,
                     };
 
                     // Should this be used if a text size is specified?
@@ -137,18 +138,25 @@ impl<'a> Layout<'a> {
                         ..fontdue::layout::LayoutSettings::default()
                     };
 
-                    let mut layout = Vec::new();
-                    fontdue::layout::layout_horizontal(&text_style, &layout_settings, &mut layout);
+                    let mut layout_output = Vec::new();
+                    let mut layout = fontdue::layout::Layout::new();
+                    layout.layout_horizontal(
+                        &fonts,
+                        &[&text_style],
+                        &layout_settings,
+                        &mut layout_output,
+                    );
 
-                    if let Some(c) = layout.get(0) {
+                    if let Some(c) = layout_output.get(0) {
                         let rectangle = Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
-                        let total_rectangle = layout.iter().fold(rectangle, |r, c| {
+                        let total_rectangle = layout_output.iter().fold(rectangle, |r, c| {
+                            //   println!("c.y: {:?} c.height: {:?}", c.y, c.height);
                             let c_rectangle =
                                 Rectangle::new(c.x, c.y, c.width as f32, c.height as f32);
                             r.join(c_rectangle)
                         });
 
-                        (total_rectangle.width + rectangle.x, total_rectangle.height)
+                        (total_rectangle.width, total_rectangle.height)
                     } else {
                         (0., 0.)
                     }

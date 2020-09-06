@@ -36,11 +36,12 @@ dependencies = [
 
 [[package]]
 name = "fontdue"
-version = "0.1.2"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bf49a0955055567344b8a7118a5d8100da63b0ac8fe4b62edbe32682080176f"
+checksum = "1af2a73ba61c333080c2b068d48a4a19ccb8ec07059378f2d690fb275135aa45"
 dependencies = [
  "hashbrown",
+ "ttf-parser",
 ]
 
 [[package]]
@@ -83,7 +84,6 @@ dependencies = [
 [[package]]
 name = "kapp"
 version = "0.1.0"
-source = "git+https://github.com/kettle11/kapp?branch=main#c9f0b34f31d81b35deaef75f3aab36a7ad3da0bf"
 dependencies = [
  "kapp_gl_context",
  "kapp_platforms",
@@ -92,7 +92,6 @@ dependencies = [
 [[package]]
 name = "kapp_gl_context"
 version = "0.1.0"
-source = "git+https://github.com/kettle11/kapp?branch=main#c9f0b34f31d81b35deaef75f3aab36a7ad3da0bf"
 dependencies = [
  "kapp_platform_common",
  "objc",
@@ -105,7 +104,6 @@ dependencies = [
 [[package]]
 name = "kapp_platform_common"
 version = "0.1.0"
-source = "git+https://github.com/kettle11/kapp?branch=main#c9f0b34f31d81b35deaef75f3aab36a7ad3da0bf"
 dependencies = [
  "raw-window-handle",
 ]
@@ -113,7 +111,6 @@ dependencies = [
 [[package]]
 name = "kapp_platforms"
 version = "0.1.0"
-source = "git+https://github.com/kettle11/kapp?branch=main#c9f0b34f31d81b35deaef75f3aab36a7ad3da0bf"
 dependencies = [
  "console_error_panic_hook",
  "kapp_platform_common",
@@ -221,6 +218,12 @@ dependencies = [
  "quote",
  "unicode-xid",
 ]
+
+[[package]]
+name = "ttf-parser"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d973cfa0e6124166b50a1105a67c85de40bbc625082f35c0f56f84cb1fb0a827"
 
 [[package]]
 name = "unicode-xid"

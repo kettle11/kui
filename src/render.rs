@@ -286,29 +286,33 @@ impl<'a> Render<'a> {
             }
             ElementType::Text(ref text) => {
                 // If no size is specified then scale the text to fit within the available space.
-                let text_size = text_properties.size.unwrap_or({
-                    let scale = (rectangle.width / element_rectangle.width)
-                        .min(rectangle.height / element_rectangle.height);
-                    scale * 100.
-                });
+                let text_size = text_properties.size;
 
                 if let Some(font) = text_properties.font {
+                    let fonts = [&self.fonts[font.0]];
                     let text_style = fontdue::layout::TextStyle {
                         text: &text,
                         px: text_size,
-                        font: &self.fonts[font.0],
+                        font_index: 0,
                     };
 
                     let layout_settings = fontdue::layout::LayoutSettings {
                         ..fontdue::layout::LayoutSettings::default()
                     };
 
-                    let mut layout = Vec::new();
-                    fontdue::layout::layout_horizontal(&text_style, &layout_settings, &mut layout);
+                    let mut layout_output = Vec::new();
+                    let mut layout = fontdue::layout::Layout::new();
+
+                    layout.layout_horizontal(
+                        &fonts,
+                        &[&text_style],
+                        &layout_settings,
+                        &mut layout_output,
+                    );
 
                     // It'd be good to have an option to trim overflow text if it's too long for the container.
 
-                    for c in layout {
+                    for c in layout_output {
                         let texture_rectangle = self.drawing_info.texture.get_character(
                             &self.fonts[font.0],
                             c.key,
@@ -324,8 +328,8 @@ impl<'a> Render<'a> {
                             // Fontdue lays out relative to the upper left corner.
                             // Fontdue's coordinate system is with 0, 0 in the lower left.
                             let c_rectangle = (
-                                rectangle.x + c.x as f32,
-                                rectangle.y, // Why is this shifting like this?
+                                rectangle.x as f32 + c.x,
+                                rectangle.y + -c.y - texture_rectangle.height as f32, // Why is this shifting like this?
                                 texture_rectangle.width as f32,
                                 texture_rectangle.height as f32,
                             );
@@ -342,7 +346,14 @@ impl<'a> Render<'a> {
                                 rectangle: c_rectangle,
                                 color: (1.0, 1.0, 1.0, 1.0),
                                 radiuses: None,
-                            })
+                            });
+                        /*
+                        self.drawing_info.drawables.push(Drawable {
+                            texture_rectangle: (0., 0., 0., 0.), // This will be replaced later in the texture rectangle fixup step
+                            rectangle: c_rectangle,
+                            color: (1.0, 0.0, 0.0, 1.0),
+                            radiuses: None,
+                        });*/
                         } else {
                             println!("Text unrendered because texture atlas is full");
                         }
