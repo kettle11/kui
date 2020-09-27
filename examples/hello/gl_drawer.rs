@@ -322,7 +322,6 @@ impl GLDrawer {
         indices.len()
     }
 
-    /// This does too much setup per call.
     pub fn draw(&mut self, gl: &Context, drawing_info: &DrawingInfo) {
         let index_count = self.update_data(gl, drawing_info);
 

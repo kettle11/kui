@@ -19,6 +19,10 @@ impl SimpleUI {
         self.ui.edit()
     }
 
+    pub fn new_font(&mut self, bytes: &[u8]) -> crate::FontHandle {
+        self.ui.font_from_bytes(bytes)
+    }
+
     pub fn new(app: Application, events: Events) -> Self {
         let window_width = 1200;
         let window_height = 800;
@@ -66,6 +70,10 @@ impl SimpleUI {
     pub async fn update(&mut self) {
         // Perform drawing here assuming that a break occurred at a draw previously.
         let drawing_info = self.ui.render();
+        unsafe {
+            self.gl
+                .clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+        }
         self.gl_drawer.draw(&self.gl, &drawing_info);
 
         if self.ui.needs_redraw() {

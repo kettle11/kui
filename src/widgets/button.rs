@@ -65,7 +65,18 @@ impl Button {
 
 impl Widget for Button {}
 
-pub fn button(parent: &UIBuilder, id: u64, text: &str) -> bool {
+pub fn button_with_id(parent: &UIBuilder, id: u64, text: &str) -> bool {
+    // Create or get an existing button.
+    let mut button = parent.get_widget(id).1.unwrap_or(Box::new(Button::new()));
+    let pressed = button.build(parent, text);
+    parent.add_widget(id, button);
+    pressed
+}
+
+#[track_caller]
+pub fn button(parent: &UIBuilder, text: &str) -> bool {
+    let id = super::calculate_id(text);
+
     // Create or get an existing button.
     let mut button = parent.get_widget(id).1.unwrap_or(Box::new(Button::new()));
     let pressed = button.build(parent, text);
