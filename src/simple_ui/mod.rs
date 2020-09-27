@@ -38,20 +38,19 @@ where
 
     let ui_context = UIContext::new();
 
-    // Run user function for the first time
-    let mut user_future = Box::pin(run_function(ui_context.clone()));
-
-    /*
-    let inter_medium = ui_context
-        .get_ui()
-        .font_from_bytes(include_bytes!("../../resources/Inter-Medium.ttf"));
-        */
     ui_context
         .get_ui()
         .resize(window_width as f32, window_height as f32);
 
     let mut gl_drawer = gl_drawer::GLDrawer::new(&gl);
 
+    // Run user function for the first time
+    let mut user_future = Box::pin(run_function(ui_context.clone()));
+    let waker = empty_waker::create();
+    let mut context = Context::from_waker(&waker);
+    let _ = user_future.as_mut().poll(&mut context);
+
+    window.request_redraw();
     event_loop.run(move |event| match event {
         Event::WindowCloseRequested { .. } => app.quit(),
         Event::WindowResized { width, height, .. } => {
@@ -113,7 +112,7 @@ impl UIContext {
     pub fn new() -> Self {
         Self {
             ui: Rc::new(RefCell::new(UI::new())),
-            ready: Rc::new(RefCell::new(false)),
+            ready: Rc::new(RefCell::new(true)),
         }
     }
 
@@ -137,10 +136,14 @@ pub struct NextFrameFuture<'a, 'b> {
 impl<'a: 'b, 'b> Future for NextFrameFuture<'a, 'b> {
     type Output = RefMut<'b, UI>;
 
-    fn poll(mut self: Pin<&mut Self>, _ctx: &mut Context) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, _ctx: &mut Context) -> Poll<Self::Output> {
         if *self.ui_context.ready.borrow() {
             *self.ui_context.ready.borrow_mut() = false;
-            Poll::Ready((*self.ui_context.ui).borrow_mut())
+            if let Ok(ui) = (*self.ui_context.ui).try_borrow_mut() {
+                Poll::Ready(ui)
+            } else {
+                Poll::Pending
+            }
         } else {
             Poll::Pending
         }
