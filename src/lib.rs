@@ -10,6 +10,14 @@ pub use drawing_info::{Drawable, DrawingInfo};
 pub use render::Render;
 pub use ui::*;
 
+pub use widgets::*;
+
+#[cfg(feature = "simple_ui")]
+pub mod simple_ui;
+
+#[cfg(feature = "simple_ui")]
+pub use simple_ui::*;
+
 #[macro_export]
 macro_rules! id {
     ($s:expr) => {{

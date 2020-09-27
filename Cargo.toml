@@ -7,11 +7,16 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+glow = {git = "https://github.com/grovesNL/glow", optional = true}
 fontdue = "0.2.4"
 rect_packer = "0.2.1"
+kapp = {branch = "main", git = "https://github.com/kettle11/kapp", optional=true}
+
+[features]
+default = ["simple_ui"]
+ # The `simple_ui` feature provides a ready to use framework for building simple UI apps.
+simple_ui = ["kapp", "glow"]
 
 [dev-dependencies]
-kapp = { path="../kapp"}
-glow = {git = "https://github.com/grovesNL/glow"}
 
 

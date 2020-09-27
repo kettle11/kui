@@ -84,6 +84,7 @@ dependencies = [
 [[package]]
 name = "kapp"
 version = "0.1.0"
+source = "git+https://github.com/kettle11/kapp?branch=main#31ff3c66e22a1e42360b5d2118ab84fcf7078f63"
 dependencies = [
  "kapp_gl_context",
  "kapp_platforms",
@@ -92,6 +93,7 @@ dependencies = [
 [[package]]
 name = "kapp_gl_context"
 version = "0.1.0"
+source = "git+https://github.com/kettle11/kapp?branch=main#31ff3c66e22a1e42360b5d2118ab84fcf7078f63"
 dependencies = [
  "kapp_platform_common",
  "objc",
@@ -104,6 +106,7 @@ dependencies = [
 [[package]]
 name = "kapp_platform_common"
 version = "0.1.0"
+source = "git+https://github.com/kettle11/kapp?branch=main#31ff3c66e22a1e42360b5d2118ab84fcf7078f63"
 dependencies = [
  "raw-window-handle",
 ]
@@ -111,6 +114,7 @@ dependencies = [
 [[package]]
 name = "kapp_platforms"
 version = "0.1.0"
+source = "git+https://github.com/kettle11/kapp?branch=main#31ff3c66e22a1e42360b5d2118ab84fcf7078f63"
 dependencies = [
  "console_error_panic_hook",
  "kapp_platform_common",
