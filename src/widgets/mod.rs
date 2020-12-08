@@ -2,6 +2,7 @@ mod button;
 mod drag;
 mod interpolation;
 mod scroll_view;
+mod text_field;
 //mod slider;
 mod horizontal_divider;
 mod vertical_divider;
@@ -9,6 +10,7 @@ pub use button::*;
 pub use horizontal_divider::*;
 pub use scroll_view::*;
 //pub use slider::*;
+pub use text_field::*;
 pub use vertical_divider::*;
 
 #[track_caller]

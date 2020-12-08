@@ -67,10 +67,43 @@ impl SimpleUI {
         }
     }
 
-    pub async fn update(&mut self) {
+    pub fn handle_event(&mut self, event: Event) {
+        match event {
+            Event::WindowCloseRequested { .. } => self.application.quit(),
+            Event::WindowResized { width, height, .. } => {
+                self.gl_context.resize();
+                unsafe {
+                    self.gl_context.resize(); // Resizes the window buffer
+                    self.gl.viewport(0, 0, width as i32, height as i32);
+                }
+                self.ui.resize(width as f32, height as f32);
+                self.window.request_redraw();
+            }
+            Event::PointerMoved { x, y, .. } => {
+                self.ui.pointer_move(x as f32, y as f32);
+                self.window.request_redraw();
+            }
+            Event::PointerDown { x, y, .. } => {
+                self.ui.pointer_down(x as f32, y as f32);
+                self.window.request_redraw();
+            }
+            Event::PointerUp { x, y, .. } => {
+                self.ui.pointer_up(x as f32, y as f32);
+                self.window.request_redraw();
+            }
+            Event::Scroll { delta_y, .. } => {
+                self.ui.scroll(delta_y as f32);
+                self.window.request_redraw();
+            }
+            _ => {}
+        }
+    }
+
+    pub fn draw(&mut self) {
         // Perform drawing here assuming that a break occurred at a draw previously.
         let drawing_info = self.ui.render();
         unsafe {
+            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
             self.gl
                 .clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
@@ -80,39 +113,16 @@ impl SimpleUI {
             self.window.request_redraw();
         }
         self.gl_context.swap_buffers();
+    }
+
+    pub async fn update(&mut self) {
+        self.draw();
 
         loop {
-            match self.events.next().await {
-                Event::WindowCloseRequested { .. } => self.application.quit(),
-                Event::WindowResized { width, height, .. } => {
-                    self.gl_context.resize();
-                    unsafe {
-                        self.gl_context.resize(); // Resizes the window buffer
-                        self.gl.viewport(0, 0, width as i32, height as i32);
-                    }
-                    self.ui.resize(width as f32, height as f32);
-                    self.window.request_redraw();
-                }
-                Event::PointerMoved { x, y, .. } => {
-                    self.ui.pointer_move(x as f32, y as f32);
-                    self.window.request_redraw();
-                }
-                Event::PointerDown { x, y, .. } => {
-                    self.ui.pointer_down(x as f32, y as f32);
-                    self.window.request_redraw();
-                }
-                Event::PointerUp { x, y, .. } => {
-                    self.ui.pointer_up(x as f32, y as f32);
-                    self.window.request_redraw();
-                }
-                Event::Scroll { delta_y, .. } => {
-                    self.ui.scroll(delta_y as f32);
-                    self.window.request_redraw();
-                }
-                Event::Draw { .. } => {
-                    return;
-                }
-                _ => {}
+            let event = self.events.next().await;
+            match event {
+                Event::Draw { .. } => return,
+                _ => self.handle_event(event),
             }
         }
     }

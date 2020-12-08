@@ -73,13 +73,11 @@ pub fn button_with_id(parent: &UIBuilder, id: u64, text: &str) -> bool {
     pressed
 }
 
+/// Create a button
+/// Returns true if the button is pressed.
+/// Uses button text for ID calculation.
 #[track_caller]
 pub fn button(parent: &UIBuilder, text: &str) -> bool {
     let id = super::calculate_id(text);
-
-    // Create or get an existing button.
-    let mut button = parent.get_widget(id).1.unwrap_or(Box::new(Button::new()));
-    let pressed = button.build(parent, text);
-    parent.add_widget(id, button);
-    pressed
+    button_with_id(parent, id, text)
 }

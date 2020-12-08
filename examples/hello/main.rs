@@ -24,9 +24,9 @@ fn main() {
     // gl_context.set_vsync(VSync::Adaptive);
 
     #[cfg(target_arch = "wasm32")]
-    let gl = glow::Context::from_webgl2_context(gl_context.webgl2_context().unwrap());
+    let gl = unsafe { glow::Context::from_webgl2_context(gl_context.webgl2_context().unwrap()) };
     #[cfg(not(target_arch = "wasm32"))]
-    let gl = glow::Context::from_loader_function(|s| gl_context.get_proc_address(s));
+    let gl = unsafe { glow::Context::from_loader_function(|s| gl_context.get_proc_address(s)) };
 
     unsafe {
         // gl.enable(SCISSOR_TEST);
@@ -91,11 +91,7 @@ fn main() {
             let scroll = scroll.flexible().text_size(40.).spaced_column(20.);
 
             for (i, c) in "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().enumerate() {
-                if button(
-                    &scroll.center_horizontal(),
-                    id!() + i as u64,
-                    &c.to_string(),
-                ) {
+                if button(&scroll.center_horizontal(), &c.to_string()) {
                     letter = c.to_string();
                     window.request_redraw();
                 }
